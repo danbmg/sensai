@@ -2,15 +2,17 @@ import json
 
 import pytest
 import requests
+from urllib3.exceptions import ReadTimeoutError
 
 from sensai.core import ollama_client
-from sensai.core.ollama_client import OllamaClient, OllamaError
+from sensai.core.ollama_client import ModelNotFoundError, OllamaClient, OllamaError
 
 
 class FakeResponse:
-    def __init__(self, lines, status=200):
+    def __init__(self, lines=(), status=200, payload=None):
         self.lines = lines
-        self.status = status
+        self.status_code = status
+        self.payload = payload
 
     def __enter__(self):
         return self
@@ -19,11 +21,17 @@ class FakeResponse:
         return False
 
     def raise_for_status(self):
-        if self.status >= 400:
-            raise requests.HTTPError(f"{self.status}")
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"{self.status_code}")
+
+    def json(self):
+        return self.payload
 
     def iter_lines(self):
-        yield from self.lines
+        for line in self.lines:
+            if isinstance(line, Exception):
+                raise line
+            yield line
 
 
 def ndjson(*objects):
@@ -133,7 +141,65 @@ def test_error_line_raises(fake_post):
         next(stream)
 
 
-def test_http_error_raises(fake_post):
+def test_final_chunk_carries_durations_in_seconds(fake_post):
+    fake_post(ndjson({"message": {"content": ""}, "done": True, "load_duration": 2_000_000_000,
+                      "prompt_eval_duration": 500_000_000, "eval_duration": 1_500_000_000}))
+    (last,) = OllamaClient("m").chat_stream([])
+
+    assert (last.load_s, last.prompt_eval_s, last.eval_s) == (2.0, 0.5, 1.5)
+
+
+def test_missing_model_raises_model_not_found(fake_post):
     fake_post([], status=404)
-    with pytest.raises(requests.HTTPError):
+    with pytest.raises(ModelNotFoundError, match="absent"):
         list(OllamaClient("absent").chat_stream([]))
+
+
+def test_other_http_error_raises(fake_post):
+    fake_post([], status=500)
+    with pytest.raises(requests.HTTPError):
+        list(OllamaClient("m").chat_stream([]))
+
+
+def test_mid_stream_timeout_is_a_timeout_not_a_connection_error(fake_post):
+    # requests transforme ce timeout en ConnectionError : le client doit le rétablir
+    timeout = requests.ConnectionError(ReadTimeoutError(None, None, "Read timed out."))
+    fake_post(ndjson({"message": {"content": "a"}, "done": False}) + [timeout])
+    stream = OllamaClient("m").chat_stream([])
+    next(stream)
+    with pytest.raises(requests.ReadTimeout):
+        next(stream)
+
+
+def test_real_connection_error_unchanged(fake_post):
+    fake_post([requests.ConnectionError("connection refused")])
+    with pytest.raises(requests.ConnectionError) as info:
+        list(OllamaClient("m").chat_stream([]))
+    assert not isinstance(info.value, requests.Timeout)
+
+
+def test_list_models(monkeypatch):
+    payload = {"models": [{"name": "qwen3:4b-instruct"}, {"name": "llama3.2:3b"}]}
+    monkeypatch.setattr(ollama_client.requests, "get",
+                        lambda url, **kw: FakeResponse(payload=payload))
+
+    assert OllamaClient("m").list_models() == ["qwen3:4b-instruct", "llama3.2:3b"]
+
+
+def test_capabilities(monkeypatch):
+    calls = []
+
+    def post(url, **kwargs):
+        calls.append((url, kwargs["json"]))
+        return FakeResponse(payload={"capabilities": ["completion", "tools"]})
+    monkeypatch.setattr(ollama_client.requests, "post", post)
+
+    assert OllamaClient("m", host="http://h:1").capabilities() == ["completion", "tools"]
+    assert calls == [("http://h:1/api/show", {"model": "m"})]
+
+
+def test_capabilities_missing_model(monkeypatch):
+    monkeypatch.setattr(ollama_client.requests, "post",
+                        lambda url, **kw: FakeResponse(status=404))
+    with pytest.raises(ModelNotFoundError):
+        OllamaClient("absent").capabilities()
