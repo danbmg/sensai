@@ -1,0 +1,7 @@
+requests
+fastapi
+uvicorn
+numpy
+pytest>=7
+httpx
+tomli; python_version < "3.11"
