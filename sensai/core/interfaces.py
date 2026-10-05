@@ -1,40 +1,71 @@
-"""Contrat partagé entre les trois blocs (Phase 0).
+"""Contrat partagé Sensai — PROPOSITION v2, à valider à 3 (Dan, Timothée, Matteo).
 
-Toute modification de ce fichier engage Dan, Timothée et Matteo :
-la signaler à l'équipe avant de la pousser.
+Ne pas coder contre la v1 : cette version remplace GuardResult.mapping par un
+PIIVault par session et précise ce qui est en clair et ce qui est pseudonymisé.
+
+Frontière PII : le pipeline (Dan) est le SEUL endroit qui pseudonymise et ré-identifie.
+- Côté clair (local)   : ContextProvider (recherche patient), ToolRegistry.call(),
+                         affichage CLI/web, tous les Event.
+- Côté pseudonymisé    : messages envoyés au modèle de chat, requête d'embedding RAG,
+                         historique stocké (SessionState.history), logs.
+
+Pseudonymes : [TYPE_N], TYPE = un seul mot parmi PSEUDONYM_TYPES (ex. [PATIENT_1]).
 """
+import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Literal, Protocol
 
-Message = dict[str, Any]  # format Ollama : {"role", "content", "tool_calls"?}
+Message = dict[str, Any]  # format Ollama : {"role", "content", "tool_calls"?, "tool_name"?}
 
-# Pseudonymes PII : format [TYPE_N], ex. [PATIENT_1], [TEL_1]
+PSEUDONYM_TYPES = ("PATIENT", "NAISSANCE", "ADRESSE", "TEL", "NIR", "EMAIL")
+PSEUDONYM_RE = re.compile(r"\[(?:%s)_\d+\]" % "|".join(PSEUDONYM_TYPES))
 
 
 @dataclass
 class GuardResult:
-    text: str                                   # texte pseudonymisé
-    blocked: bool = False                       # requête refusée ?
+    blocked: bool = False                       # requête refusée (hors périmètre) ?
     reason: str = ""                            # motif affiché si bloquée
-    mapping: dict[str, str] = field(default_factory=dict)  # pseudonyme -> valeur réelle
 
 
-class InputGuard(Protocol):                     # Matteo (EV2)
+class InputGuard(Protocol):                     # Matteo (EV2) — filtre de périmètre, sans état
     def check(self, text: str) -> GuardResult: ...
 
 
+class PIIVault(Protocol):                       # Matteo (EV2) — UNE instance par session
+    def mask(self, text: str) -> str: ...       # clair -> [TYPE_N] ; idempotent ; réutilise les pseudonymes
+    def reveal(self, text: str) -> str: ...     # [TYPE_N] -> clair (pseudonymes inconnus laissés tels quels)
+    def reveal_args(self, args: dict) -> dict: ...  # idem, récursif sur les arguments d'outils
+    def export(self) -> dict[str, str]: ...     # pseudonyme -> valeur réelle, pour la persistance
+
+
+VaultFactory = Callable[[dict[str, str]], PIIVault]  # recrée le coffre à partir de export()
+
+
 class OutputGuard(Protocol):                    # Matteo (EV2)
-    def check(self, text: str, mapping: dict[str, str]) -> str: ...
+    # Appelé sur la RÉPONSE COMPLÈTE déjà passée par vault.mask(), avant l'écriture
+    # dans l'historique et les logs. Masque toute PII brute restante (regex).
+    def check(self, text: str) -> str: ...
 
 
 class ContextProvider(Protocol):                # Timothée (profil M1, patients M3, RAG R1)
-    def provide(self, query: str, session_id: str) -> list[Message]: ...
+    def provide(self, query: str, masked_query: str, session_id: str) -> list[Message]: ...
+    # query        : EN CLAIR, uniquement pour la recherche patient dans SQLite ;
+    # masked_query : seule entrée autorisée pour l'embedding RAG ;
+    # retour       : EN CLAIR (le pipeline applique vault.mask sur chaque "content").
+    # Le corpus RAG ne contient que des documents publics : jamais de dossier patient indexé.
+
+
+@dataclass
+class SessionState:
+    history: list[Message] = field(default_factory=list)   # pseudonymisé (ce que le modèle a vu)
+    pii_map: dict[str, str] = field(default_factory=dict)  # PIIVault.export(), stocké en local
 
 
 class SessionStore(Protocol):                   # Timothée (M1)
-    def load(self, session_id: str) -> list[Message]: ...
-    def save(self, session_id: str, history: list[Message]) -> None: ...
-    def list(self) -> list[str]: ...
+    def load(self, session_id: str) -> SessionState: ...   # session inconnue -> SessionState() vide
+    def save(self, session_id: str, state: SessionState) -> None: ...
+    # Pas « list » : en 3.14 l'annotation list[str] désignerait la méthode elle-même.
+    def list_sessions(self) -> list[str]: ...
 
 
 @dataclass
@@ -43,7 +74,7 @@ class ToolResult:
     is_error: bool = False
 
 
-class ToolRegistry(Protocol):                   # Matteo (T1)
+class ToolRegistry(Protocol):                   # Matteo (T1) — arguments et résultats EN CLAIR
     def schemas(self) -> list[dict]: ...        # format "tools" d'Ollama
     def is_dangerous(self, name: str) -> bool: ...  # True => validation humaine (A3)
     def call(self, name: str, args: dict) -> ToolResult: ...
@@ -53,7 +84,7 @@ class ToolRegistry(Protocol):                   # Matteo (T1)
 class Event:                                    # émis par le pipeline, lu par CLI et web
     type: Literal["token", "tool_call", "tool_result", "confirm",
                   "usage", "error", "done"]
-    data: Any = None
+    data: Any = None                            # EN CLAIR : ne jamais logger à partir des Event
 
 
-ConfirmFn = Callable[[str, str, dict], bool]    # (id, outil, args) -> accepté ?
+ConfirmFn = Callable[[str, str, dict], bool]    # (id, outil, args EN CLAIR) -> accepté ?
