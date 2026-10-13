@@ -1,19 +1,34 @@
+from types import SimpleNamespace
+
 import pytest
+import requests
 
 from sensai import cli
-from sensai.core.ollama_client import ChatChunk
+from sensai.core.ollama_client import ChatChunk, ModelNotFoundError, OllamaError
+
+TOOLS = ["completion", "tools"]
 
 
 class FakeClient:
-    replies: list[list[ChatChunk]] = []     # une liste de fragments par appel au modèle
+    capabilities_result: list[str] | Exception = TOOLS     # réponse de /api/show, ou erreur
+    replies: list[list] = []                # une liste de fragments par appel ; une exception y est levée
     calls: list[list[dict]] = []            # messages reçus, un élément par appel
 
     def __init__(self, model, host, options=None, **kwargs):
         FakeClient.model, FakeClient.host, FakeClient.options = model, host, options
+        self.model, self.host, self.timeout = model, host, 120.0
+
+    def capabilities(self):
+        if isinstance(FakeClient.capabilities_result, Exception):
+            raise FakeClient.capabilities_result
+        return FakeClient.capabilities_result
 
     def chat_stream(self, messages, tools=None):
         FakeClient.calls.append(messages)
-        yield from FakeClient.replies[len(FakeClient.calls) - 1]
+        for item in FakeClient.replies[len(FakeClient.calls) - 1]:
+            if isinstance(item, BaseException):
+                raise item
+            yield item
 
 
 def reply(text):
@@ -30,21 +45,26 @@ def config_file(tmp_path):
 
 @pytest.fixture
 def run_cli(monkeypatch, capsys, config_file):
-    """Lance la CLI sur `inputs` (puis Ctrl+D) ; renvoie la sortie, sans la bannière."""
+    """Lance la CLI sur `inputs` (puis Ctrl+D) ; renvoie stdout sans la bannière, et stderr.
+
+    Une exception dans `inputs` est levée par input() (ex. KeyboardInterrupt = Ctrl+C).
+    """
     monkeypatch.setattr(cli, "OllamaClient", FakeClient)
 
-    def run(inputs, replies=(), argv=()):
+    def run(inputs, replies=(), argv=(), capabilities=TOOLS):
+        FakeClient.capabilities_result = capabilities
         FakeClient.replies, FakeClient.calls = list(replies), []
         lines = iter(inputs)
 
         def fake_input(prompt=""):
-            try:
-                return next(lines)
-            except StopIteration:
-                raise EOFError from None
+            line = next(lines, EOFError())
+            if isinstance(line, BaseException):
+                raise line
+            return line
         monkeypatch.setattr("builtins.input", fake_input)
         cli.main(["--config", str(config_file), *argv])
-        return capsys.readouterr().out.split("\n", 1)[1]
+        captured = capsys.readouterr()
+        return SimpleNamespace(out=captured.out.split("\n", 1)[1], err=captured.err)
     return run
 
 
@@ -52,7 +72,8 @@ SYSTEM = {"role": "system", "content": "Tu es Sensai."}
 
 
 def test_prints_streamed_answer(run_cli):
-    out = run_cli(["Salut"], [[ChatChunk(content="Bon"), ChatChunk(content="jour", done=True)]])
+    out = run_cli(["Salut"],
+                  [[ChatChunk(content="Bon"), ChatChunk(content="jour", done=True)]]).out
 
     assert out == "Bonjour\n\n"         # réponse, puis saut de ligne du Ctrl+D
 
@@ -73,6 +94,7 @@ def test_model_flag_overrides_config(run_cli):
 
 def test_banner_shows_model_and_commands(monkeypatch, capsys, config_file):
     monkeypatch.setattr(cli, "OllamaClient", FakeClient)
+    monkeypatch.setattr(FakeClient, "capabilities_result", TOOLS)
     monkeypatch.setattr("builtins.input", lambda prompt="": "/quit")
     cli.main(["--config", str(config_file)])
 
@@ -81,7 +103,8 @@ def test_banner_shows_model_and_commands(monkeypatch, capsys, config_file):
 
 
 def test_thinking_printed_dimmed_before_answer(run_cli):
-    out = run_cli(["Salut"], [[ChatChunk(thinking="hmm"), ChatChunk(content="Bonjour", done=True)]])
+    out = run_cli(["Salut"],
+                  [[ChatChunk(thinking="hmm"), ChatChunk(content="Bonjour", done=True)]]).out
 
     assert out == f"{cli.DIM}hmm{cli.RESET}Bonjour\n\n"
 
@@ -107,7 +130,7 @@ def test_history_keeps_full_answer_without_thinking(run_cli):
 
 def test_reset_clears_history_but_keeps_system_prompt(run_cli):
     out = run_cli(["Je m'appelle Paul", "/reset", "Comment je m'appelle ?"],
-                  [reply("Enchanté."), reply("Je ne sais pas.")])
+                  [reply("Enchanté."), reply("Je ne sais pas.")]).out
 
     assert FakeClient.calls[1] == [SYSTEM, {"role": "user", "content": "Comment je m'appelle ?"}]
     assert "Conversation effacée." in out
@@ -132,10 +155,94 @@ def test_commands_ignore_surrounding_spaces(run_cli):
 
 
 def test_unknown_command_not_sent_to_model(run_cli):
-    out = run_cli(["/reste"])
+    out = run_cli(["/reste"]).out
 
     assert FakeClient.calls == []
     assert "Commande inconnue : /reste" in out
+
+
+# --- Erreurs au démarrage (/api/show) ---
+
+def test_ollama_down_at_startup_exits_with_message(run_cli):
+    with pytest.raises(SystemExit, match=r"Ollama ne répond pas sur http://h:1.*ollama serve"):
+        run_cli(["Salut"], capabilities=requests.ConnectionError("refused"))
+    assert FakeClient.calls == []
+
+
+def test_connect_timeout_reported_as_unreachable(run_cli):
+    with pytest.raises(SystemExit, match="Ollama ne répond pas sur"):
+        run_cli([], capabilities=requests.ConnectTimeout("timed out"))
+
+
+def test_missing_model_suggests_pull(run_cli):
+    with pytest.raises(SystemExit, match="ollama pull llama3.2:3b"):
+        run_cli(["Salut"], capabilities=ModelNotFoundError("llama3.2:3b"))
+    assert FakeClient.calls == []
+
+
+def test_model_without_tools_refused(run_cli):
+    with pytest.raises(SystemExit, match="« tools » absente"):
+        run_cli(["Salut"], capabilities=["completion"])
+    assert FakeClient.calls == []
+
+
+def test_thinking_model_warns_but_runs(run_cli):
+    result = run_cli(["Salut"], [reply("Bonjour")], capabilities=TOOLS + ["thinking"])
+
+    assert "⚠ llama3.2:3b est un modèle « thinking »" in result.err
+    assert len(FakeClient.calls) == 1
+
+
+def test_other_http_error_at_startup_exits_with_message(run_cli):
+    with pytest.raises(SystemExit, match="Erreur d'Ollama : 500"):
+        run_cli([], capabilities=requests.HTTPError("500 Server Error"))
+
+
+# --- Erreurs en cours de session : message, et la session continue ---
+
+def test_empty_input_ignored(run_cli):
+    run_cli(["", "   ", "Salut"], [reply("Bonjour")])
+
+    assert len(FakeClient.calls) == 1
+
+
+def test_ctrl_c_at_prompt_keeps_session(run_cli):
+    result = run_cli(["Je m'appelle Paul", KeyboardInterrupt(), "Comment je m'appelle ?"],
+                     [reply("Enchanté."), reply("Paul.")])
+
+    assert len(FakeClient.calls[1]) == 4        # système + tour 1 + question
+    assert "/quit pour quitter" in result.out
+
+
+def test_ctrl_c_during_generation_drops_turn_and_keeps_session(run_cli):
+    result = run_cli(["Je m'appelle Paul", "Raconte une histoire", "Comment je m'appelle ?"],
+                     [reply("Enchanté."), [ChatChunk(content="Il était"), KeyboardInterrupt()],
+                      reply("Paul.")])
+
+    assert f"Il était\n{cli.DIM}Génération interrompue." in result.out
+    assert FakeClient.calls[2] == [
+        SYSTEM,
+        {"role": "user", "content": "Je m'appelle Paul"},
+        {"role": "assistant", "content": "Enchanté."},
+        {"role": "user", "content": "Comment je m'appelle ?"},
+    ]
+
+
+@pytest.mark.parametrize("error, message", [
+    (requests.ReadTimeout("read timed out"), "aucun fragment reçu en 120 s"),
+    (requests.ConnectionError("refused"), "ollama serve"),
+    (ModelNotFoundError("llama3.2:3b"), "ollama pull llama3.2:3b"),
+    (OllamaError("model runner crashed"), "Erreur d'Ollama : model runner crashed"),
+])
+def test_error_during_generation_reported_and_session_kept(run_cli, error, message):
+    result = run_cli(["Je m'appelle Paul", "Raconte", "Comment je m'appelle ?"],
+                     [reply("Enchanté."), [ChatChunk(content="Il était"), error],
+                      reply("Paul.")])
+
+    assert message in result.err
+    assert "Traceback" not in result.err
+    assert [m["content"] for m in FakeClient.calls[2]] == [
+        "Tu es Sensai.", "Je m'appelle Paul", "Enchanté.", "Comment je m'appelle ?"]
 
 
 def test_missing_config_exits_with_message(tmp_path):
