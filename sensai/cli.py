@@ -8,6 +8,9 @@ from sensai.core.config import ConfigError, load_config
 from sensai.core.interfaces import Event
 from sensai.core.ollama_client import OLLAMA_ERRORS, OllamaClient, describe_error
 from sensai.core.pipeline import Pipeline
+from sensai.guardrails.input_guardrail import SensaiInputGuard
+from sensai.guardrails.output_guardrail import SensaiOutputGuard
+from sensai.guardrails.pii_vault import SensaiPIIVault
 
 DIM, RESET = "\033[2m", "\033[0m"
 HELP = "/reset efface la conversation, /quit pour quitter"
@@ -26,7 +29,14 @@ def main(argv: list[str] | None = None) -> None:
 
     client = OllamaClient(cfg.model, cfg.host, options={"temperature": cfg.temperature})
     _check_model(client)
-    pipeline = Pipeline(client, cfg.system_prompt, cfg.max_tool_iterations)
+    pipeline = Pipeline(
+        client,
+        cfg.system_prompt,
+        cfg.max_tool_iterations,
+        input_guard=SensaiInputGuard(),
+        output_guard=SensaiOutputGuard(),
+        vault_factory=SensaiPIIVault,
+    )
     session_id = uuid.uuid4().hex
 
     print(f"{DIM}Sensai · {cfg.model} — {HELP}{RESET}")
