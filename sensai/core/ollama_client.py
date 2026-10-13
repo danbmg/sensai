@@ -96,6 +96,20 @@ class OllamaClient:
                 )
 
 
+OLLAMA_ERRORS = (OllamaError, requests.RequestException)
+
+
+def describe_error(e: Exception, client: OllamaClient) -> str:
+    """Message lisible pour une erreur d'Ollama, à la place du traceback."""
+    if isinstance(e, ModelNotFoundError):
+        return f"Modèle {client.model} absent. Installez-le avec : ollama pull {client.model}"
+    if isinstance(e, requests.ConnectionError):  # avant Timeout : ConnectTimeout hérite des deux
+        return f"Ollama ne répond pas sur {client.host}. Lancez-le avec : ollama serve"
+    if isinstance(e, requests.Timeout):
+        return f"Ollama ne répond plus : aucun fragment reçu en {client.timeout:g} s."
+    return f"Erreur d'Ollama : {e}"
+
+
 def _lines(resp: requests.Response) -> Iterator[bytes]:
     try:
         yield from resp.iter_lines()
