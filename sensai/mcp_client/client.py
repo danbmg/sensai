@@ -1,3 +1,7 @@
+
+"""Client MCP générique utilisant le transport stdio."""
+
+import asyncio
 import sys
 from typing import Any
 
@@ -6,18 +10,10 @@ from mcp.client.stdio import stdio_client
 
 
 class MCPClientError(Exception):
-    """Raised when communication with an MCP server fails."""
+    """Erreur de communication avec un serveur MCP."""
 
 
 class MCPClient:
-    """
-    Generic MCP client using stdio.
-
-    Can connect to:
-    - Sensai's custom MCP server
-    - Any compatible external MCP stdio server
-    """
-
     def __init__(
         self,
         workspace: str = ".",
@@ -27,224 +23,185 @@ class MCPClient:
     ):
         self.workspace = workspace
         self.name = name
-
         self.command = command or sys.executable
+        self.args = args if args is not None else [
+            "-m",
+            "sensai.mcp_server.server",
+            "--workspace",
+            workspace,
+        ]
 
-        self.args = (
-            args
-            if args is not None
-            else [
-                "-m",
-                "mcp_server.server",
-                "--workspace",
-                workspace,
-            ]
-        )
-
-        self._stdio_context = None
-        self._session_context = None
         self._session: ClientSession | None = None
+        self._session_task: asyncio.Task | None = None
+        self._ready: asyncio.Event | None = None
+        self._stop: asyncio.Event | None = None
+        self._startup_error: BaseException | None = None
 
-    async def connect(self) -> None:
-        """Start the MCP server and initialize the session."""
-
-        if self._session is not None:
-            return
-
-        server_params = StdioServerParameters(
-            command=self.command,
-            args=self.args,
-        )
-
+    async def _run_session(self) -> None:
+        """Maintient les contextes MCP dans une même tâche."""
         try:
-            self._stdio_context = stdio_client(server_params)
-
-            read_stream, write_stream = (
-                await self._stdio_context.__aenter__()
+            params = StdioServerParameters(
+                command=self.command,
+                args=self.args,
             )
 
-            self._session_context = ClientSession(
+            async with stdio_client(params) as (
                 read_stream,
                 write_stream,
+            ):
+                async with ClientSession(
+                    read_stream,
+                    write_stream,
+                ) as session:
+                    await session.initialize()
+
+                    self._session = session
+                    self._ready.set()
+
+                    await self._stop.wait()
+
+        except BaseException as error:
+            self._startup_error = error
+            self._ready.set()
+            raise
+
+        finally:
+            self._session = None
+
+    async def connect(self) -> None:
+        """Démarre la connexion MCP."""
+        if self._session_task is not None:
+            if self._session is not None:
+                return
+            raise MCPClientError(
+                "Une connexion MCP est déjà en cours."
             )
 
-            self._session = (
-                await self._session_context.__aenter__()
-            )
+        self._ready = asyncio.Event()
+        self._stop = asyncio.Event()
+        self._startup_error = None
 
-            await self._session.initialize()
+        self._session_task = asyncio.create_task(
+            self._run_session()
+        )
 
-        except Exception as error:
+        await self._ready.wait()
+
+        if self._startup_error is not None:
             try:
-                await self.close()
-            except Exception:
+                await self._session_task
+            except BaseException:
                 pass
 
+            self._session_task = None
+
             raise MCPClientError(
-                f"Unable to connect to MCP server "
-                f"'{self.name}': {error}"
-            ) from error
+                f"Connexion impossible à '{self.name}': "
+                f"{self._startup_error}"
+            ) from self._startup_error
 
     async def list_tools(self) -> list[dict[str, Any]]:
-        """Discover tools exposed by the MCP server."""
-
+        """Récupère les outils du serveur MCP."""
         if self._session is None:
-            raise MCPClientError(
-                f"MCP server '{self.name}' is not connected."
-            )
+            raise MCPClientError("Serveur MCP non connecté.")
 
         try:
             response = await self._session.list_tools()
-
         except Exception as error:
             raise MCPClientError(
-                f"Unable to list tools from "
-                f"'{self.name}': {error}"
+                f"Impossible de récupérer les outils : {error}"
             ) from error
 
-        tools = []
-
-        for tool in response.tools:
-
-            parameters = getattr(
-                tool,
-                "inputSchema",
-                None,
-            )
-
-            if not parameters:
-                parameters = {
-                    "type": "object",
-                    "properties": {},
-                }
-
-            tools.append(
-                {
-                    "name": tool.name,
-                    "description": tool.description or "",
-                    "parameters": parameters,
-                }
-            )
-
-        return tools
+        return [
+            {
+                "name": tool.name,
+                "description": tool.description or "",
+                "parameters": getattr(tool, "inputSchema", None)
+                or {"type": "object", "properties": {}},
+            }
+            for tool in response.tools
+        ]
 
     async def call_tool(
         self,
         name: str,
         arguments: dict[str, Any],
     ) -> Any:
-        """Execute a tool on the connected MCP server."""
-
+        """Exécute un outil sur le serveur MCP."""
         if self._session is None:
-            raise MCPClientError(
-                f"MCP server '{self.name}' is not connected."
-            )
+            raise MCPClientError("Serveur MCP non connecté.")
 
         try:
             result = await self._session.call_tool(
-                name,
-                arguments,
+                name, arguments
             )
-
         except Exception as error:
             raise MCPClientError(
-                f"MCP tool '{name}' failed: {error}"
+                f"Erreur MCP pour '{name}': {error}"
             ) from error
 
-        # MCP protocol-level tool error.
         if getattr(result, "isError", False):
-
-            error_messages = []
-
-            for item in result.content:
-                value = getattr(item, "text", None)
-
-                if value:
-                    error_messages.append(value)
-
-            message = "\n".join(error_messages)
-
+            messages = [
+                item.text
+                for item in result.content
+                if getattr(item, "text", None)
+            ]
             raise MCPClientError(
-                f"MCP tool '{name}' returned an error: "
-                f"{message or 'unknown error'}"
+                "\n".join(messages) or "Erreur MCP inconnue."
             )
 
         structured = getattr(
-            result,
-            "structuredContent",
-            None,
+            result, "structuredContent", None
         )
-
         if structured is not None:
             return structured
 
-        content = []
+        messages = [
+            item.text
+            for item in result.content
+            if getattr(item, "text", None) is not None
+        ]
 
-        for item in result.content:
-
-            value = getattr(item, "text", None)
-
-            if value is not None:
-                content.append(value)
-
-        if content:
-            return "\n".join(content)
-
-        return None
+        return "\n".join(messages) if messages else None
 
     async def close(self) -> None:
-        """Close the MCP session and subprocess."""
+        """Ferme la session MCP proprement."""
+        task = self._session_task
+
+        if task is None:
+            return
+
+        self._stop.set()
 
         try:
-            if self._session_context is not None:
-                await self._session_context.__aexit__(
-                    None,
-                    None,
-                    None,
-                )
+            await task
         finally:
-            try:
-                if self._stdio_context is not None:
-                    await self._stdio_context.__aexit__(
-                        None,
-                        None,
-                        None,
-                    )
-            finally:
-                self._session = None
-                self._session_context = None
-                self._stdio_context = None
+            self._session_task = None
+            self._session = None
+            self._ready = None
+            self._stop = None
+            self._startup_error = None
 
 
 async def register_mcp_tools(
     client: MCPClient,
     registry,
     prefix: str = "",
+    dangerous: bool = True,
 ) -> None:
-    """
-    Dynamically register MCP tools in Sensai.
-
-    A prefix can be used to avoid name collisions
-    when connecting multiple MCP servers.
-    """
-
+    """Enregistre les outils MCP dans le ToolRegistry."""
     tools = await client.list_tools()
 
     for tool in tools:
-
         original_name = tool["name"]
-
-        registered_name = (
-            f"{prefix}{original_name}"
-        )
+        registered_name = f"{prefix}{original_name}"
 
         async def execute_mcp_tool(
             _tool_name=original_name,
             **arguments,
         ):
             return await client.call_tool(
-                _tool_name,
-                arguments,
+                _tool_name, arguments
             )
 
         registry.register(
@@ -253,4 +210,5 @@ async def register_mcp_tools(
             parameters=tool["parameters"],
             function=execute_mcp_tool,
             source=f"mcp:{client.name}",
+            dangerous=dangerous,
         )

@@ -1,19 +1,47 @@
+
+"""Registre des outils disponibles dans SENSAI."""
+
+import asyncio
 import inspect
 import json
+from concurrent.futures import Future
+from threading import Thread
 from typing import Any, Callable
+
+from sensai.core.interfaces import ToolResult
+
+
+class AsyncRunner:
+    """Exécute les opérations MCP sur une boucle asynchrone dédiée."""
+
+    def __init__(self):
+        self.loop = asyncio.new_event_loop()
+        self.thread = Thread(
+            target=self.loop.run_forever,
+            daemon=True,
+            name="sensai-mcp-loop",
+        )
+        self.thread.start()
+
+    def run(self, coroutine):
+        future: Future = asyncio.run_coroutine_threadsafe(
+            coroutine, self.loop
+        )
+        return future.result()
+
+    def close(self):
+        self.loop.call_soon_threadsafe(self.loop.stop)
+        self.thread.join(timeout=5)
+        if not self.thread.is_alive():
+            self.loop.close()
 
 
 class ToolRegistry:
-    """
-    Central registry for every tool available to Sensai.
+    """Implémente le contrat ToolRegistry du pipeline."""
 
-    A tool may come from:
-    - local Python code
-    - an MCP server
-    """
-
-    def __init__(self):
+    def __init__(self, runner: AsyncRunner | None = None):
         self._tools: dict[str, dict[str, Any]] = {}
+        self.runner = runner
 
     def register(
         self,
@@ -22,12 +50,10 @@ class ToolRegistry:
         parameters: dict,
         function: Callable,
         source: str = "local",
+        dangerous: bool = False,
     ) -> None:
-
         if name in self._tools:
-            raise ValueError(
-                f"Tool '{name}' is already registered."
-            )
+            raise ValueError(f"Tool '{name}' is already registered.")
 
         self._tools[name] = {
             "name": name,
@@ -35,94 +61,94 @@ class ToolRegistry:
             "parameters": parameters,
             "function": function,
             "source": source,
+            "dangerous": dangerous,
         }
 
     def has_tool(self, name: str) -> bool:
         return name in self._tools
 
     def list_tools(self) -> list[str]:
-        return list(self._tools.keys())
+        return list(self._tools)
 
     def describe_tools(self) -> list[dict]:
         return [
             {
                 "name": tool["name"],
                 "source": tool["source"],
+                "dangerous": tool["dangerous"],
             }
             for tool in self._tools.values()
         ]
 
-    async def execute(
-        self,
-        name: str,
-        arguments: dict,
-    ) -> str:
-
-        if not self.has_tool(name):
-            return json.dumps(
-                {
-                    "success": False,
-                    "error": f"Unknown tool: {name}",
+    def schemas(self) -> list[dict]:
+        """Schémas des outils au format attendu par Ollama."""
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": tool["name"],
+                    "description": tool["description"],
+                    "parameters": tool["parameters"],
                 },
-                ensure_ascii=False,
+            }
+            for tool in self._tools.values()
+        ]
+
+    def ollama_tools(self) -> list[dict]:
+        """Alias conservé pour l'ancien code."""
+        return self.schemas()
+
+    def is_dangerous(self, name: str) -> bool:
+        # Par sécurité, un outil inconnu nécessite confirmation.
+        if name not in self._tools:
+            return True
+        return self._tools[name]["dangerous"]
+
+    def call(self, name: str, args: dict) -> ToolResult:
+        """Exécution synchrone attendue par Pipeline."""
+        if name not in self._tools:
+            return ToolResult(
+                content=f"Outil inconnu : {name}",
+                is_error=True,
+            )
+
+        if not isinstance(args, dict):
+            return ToolResult(
+                content="Les arguments doivent être un dictionnaire.",
+                is_error=True,
             )
 
         tool = self._tools[name]
 
         try:
-            result = tool["function"](**arguments)
+            function = tool["function"]
 
-            if inspect.isawaitable(result):
-                result = await result
+            if inspect.iscoroutinefunction(function):
+                if self.runner is None:
+                    return ToolResult(
+                        content="Aucune boucle asynchrone MCP configurée.",
+                        is_error=True,
+                    )
+                result = self.runner.run(function(**args))
+            else:
+                result = function(**args)
+                if inspect.isawaitable(result):
+                    if self.runner is None:
+                        return ToolResult(
+                            content="Aucune boucle asynchrone configurée.",
+                            is_error=True,
+                        )
+                    result = self.runner.run(result)
 
-            return json.dumps(
-                {
-                    "success": True,
-                    "source": tool["source"],
-                    "result": result,
-                },
-                ensure_ascii=False,
+            content = (
+                result
+                if isinstance(result, str)
+                else json.dumps(result, ensure_ascii=False, default=str)
             )
-
-        except TypeError as error:
-            return json.dumps(
-                {
-                    "success": False,
-                    "source": tool["source"],
-                    "error": (
-                        f"Invalid arguments: {error}"
-                    ),
-                },
-                ensure_ascii=False,
-            )
+            return ToolResult(content=content)
 
         except Exception as error:
-            return json.dumps(
-                {
-                    "success": False,
-                    "source": tool["source"],
-                    "error": str(error),
-                },
-                ensure_ascii=False,
+            return ToolResult(
+                content=f"Erreur de l'outil '{name}': {error}",
+                is_error=True,
             )
-
-    def ollama_tools(self) -> list[dict]:
-        tools = []
-
-        for tool in self._tools.values():
-            tools.append(
-                {
-                    "type": "function",
-                    "function": {
-                        "name": tool["name"],
-                        "description": tool[
-                            "description"
-                        ],
-                        "parameters": tool[
-                            "parameters"
-                        ],
-                    },
-                }
-            )
-
-        return tools
