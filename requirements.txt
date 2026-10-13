@@ -4,4 +4,5 @@ uvicorn
 numpy
 pytest>=7
 httpx
+mcp>=2.3,<3
 tomli; python_version < "3.11"
