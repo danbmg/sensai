@@ -1,16 +1,16 @@
 """Interface en ligne de commande."""
 import argparse
 import sys
-
-import requests
+import uuid
+from typing import Iterator
 
 from sensai.core.config import ConfigError, load_config
-from sensai.core.interfaces import Message
-from sensai.core.ollama_client import ModelNotFoundError, OllamaClient, OllamaError
+from sensai.core.interfaces import Event
+from sensai.core.ollama_client import OLLAMA_ERRORS, OllamaClient, describe_error
+from sensai.core.pipeline import Pipeline
 
 DIM, RESET = "\033[2m", "\033[0m"
 HELP = "/reset efface la conversation, /quit pour quitter"
-OLLAMA_ERRORS = (OllamaError, requests.RequestException)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -26,8 +26,8 @@ def main(argv: list[str] | None = None) -> None:
 
     client = OllamaClient(cfg.model, cfg.host, options={"temperature": cfg.temperature})
     _check_model(client)
-    system = [{"role": "system", "content": cfg.system_prompt}] if cfg.system_prompt else []
-    history: list[Message] = []     # tours précédents (user/assistant), renvoyés à chaque appel
+    pipeline = Pipeline(client, cfg.system_prompt, cfg.max_tool_iterations)
+    session_id = uuid.uuid4().hex
 
     print(f"{DIM}Sensai · {cfg.model} — {HELP}{RESET}")
     while True:
@@ -43,25 +43,18 @@ def main(argv: list[str] | None = None) -> None:
             continue
         if text == "/quit":
             return
-        if text == "/reset":
-            history.clear()
+        if text == "/reset":        # nouvelle session : l'ancienne reste dans le SessionStore
+            session_id = uuid.uuid4().hex
             print(f"{DIM}Conversation effacée.{RESET}")
             continue
         if text.startswith("/"):
             print(f"Commande inconnue : {text} ({HELP})")
             continue
 
-        user = {"role": "user", "content": text}
         try:
-            answer = _stream(client, system + history + [user])
-        except KeyboardInterrupt:
+            _show(pipeline.run(text, session_id, _refuse))
+        except KeyboardInterrupt:   # le tour n'est pas enregistré : la session reste intacte
             print(f"{DIM}Génération interrompue.{RESET}")
-            continue
-        except OLLAMA_ERRORS as e:
-            print(_explain(e, client), file=sys.stderr)
-            continue
-        # Le tour n'entre dans l'historique qu'une fois la réponse complète reçue.
-        history += [user, {"role": "assistant", "content": answer}]
 
 
 def _check_model(client: OllamaClient) -> None:
@@ -69,7 +62,7 @@ def _check_model(client: OllamaClient) -> None:
     try:
         capabilities = client.capabilities()
     except OLLAMA_ERRORS as e:
-        sys.exit(_explain(e, client))
+        sys.exit(describe_error(e, client))
     if "tools" not in capabilities:
         sys.exit(f"{client.model} ne sait pas appeler d'outils (capacité « tools » absente) : "
                  "choisissez un autre modèle.")
@@ -78,28 +71,30 @@ def _check_model(client: OllamaClient) -> None:
               "trop lent sur CPU pour la démo.", file=sys.stderr)
 
 
-def _explain(e: Exception, client: OllamaClient) -> str:
-    """Message lisible pour une erreur d'Ollama, à la place du traceback."""
-    if isinstance(e, ModelNotFoundError):
-        return f"Modèle {client.model} absent. Installez-le avec : ollama pull {client.model}"
-    if isinstance(e, requests.ConnectionError):  # avant Timeout : ConnectTimeout hérite des deux
-        return f"Ollama ne répond pas sur {client.host}. Lancez-le avec : ollama serve"
-    if isinstance(e, requests.Timeout):
-        return f"Ollama ne répond plus : aucun fragment reçu en {client.timeout:g} s."
-    return f"Erreur d'Ollama : {e}"
+def _refuse(call_id: str, tool: str, args: dict) -> bool:
+    return False                    # étape 8 : demander au médecin (« Confirmer ? [o/N] »)
 
 
-def _stream(client: OllamaClient, messages: list[Message]) -> str:
-    """Affiche la réponse au fil de l'eau et la renvoie complète (sans le raisonnement)."""
-    answer = ""
-    stream = client.chat_stream(messages)
+def _show(events: Iterator[Event]) -> None:
+    """Affiche au fil de l'eau les Event du pipeline (en clair)."""
+    mid_line = False                # une réponse est en cours sur la ligne
     try:
-        for chunk in stream:
-            if chunk.thinking:
-                print(f"{DIM}{chunk.thinking}{RESET}", end="", flush=True)
-            print(chunk.content, end="", flush=True)
-            answer += chunk.content
+        for event in events:
+            if event.type == "token":
+                print(event.data, end="", flush=True)
+                mid_line = True
+                continue
+            if mid_line:
+                print()
+                mid_line = False
+            if event.type == "tool_call":
+                args = ", ".join(f"{k}={v!r}" for k, v in event.data["args"].items())
+                print(f"{DIM}→ {event.data['tool']}({args}){RESET}")
+            elif event.type == "tool_result":
+                print(f"{DIM}← {event.data['content']}{RESET}")
+            elif event.type == "error":
+                print(event.data, file=sys.stderr)
     finally:
-        stream.close()              # ferme la connexion, y compris sur Ctrl+C : Ollama arrête de générer
-        print()
-    return answer
+        events.close()              # sur Ctrl+C : ferme le flux, Ollama arrête de générer
+        if mid_line:
+            print()
