@@ -102,11 +102,21 @@ def test_banner_shows_model_and_commands(monkeypatch, capsys, config_file):
     assert "llama3.2:3b" in banner and "/reset" in banner and "/quit" in banner
 
 
-def test_thinking_printed_dimmed_before_answer(run_cli):
+def test_thinking_not_displayed(run_cli):
+    # Event n'a pas de type « thinking » : seul le contenu de la réponse s'affiche.
     out = run_cli(["Salut"],
                   [[ChatChunk(thinking="hmm"), ChatChunk(content="Bonjour", done=True)]]).out
 
-    assert out == f"{cli.DIM}hmm{cli.RESET}Bonjour\n\n"
+    assert out == "Bonjour\n\n"
+
+
+def test_tool_call_and_result_displayed_on_their_own_lines(run_cli):
+    call = {"function": {"name": "add_patient_note", "arguments": {"patient": "Paul"}}}
+    out = run_cli(["Note"], [[ChatChunk(content="Je note."), ChatChunk(tool_calls=[call])],
+                             reply("Fait.")]).out
+
+    assert out == (f"Je note.\n{cli.DIM}→ add_patient_note(patient='Paul'){cli.RESET}\n"
+                   f"{cli.DIM}← Outil inconnu : add_patient_note{cli.RESET}\nFait.\n\n")
 
 
 def test_previous_turns_sent_to_model(run_cli):
