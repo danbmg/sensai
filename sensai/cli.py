@@ -25,7 +25,8 @@ HELP = "/reset efface la conversation, /quit pour quitter, /help pour les comman
 
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(prog="sensai", description="Assistant médical local.")
+    """Point d'entrée : prépare base, outils et pipeline, puis lance la conversation."""
+    parser =argparse.ArgumentParser(prog="sensai", description="Assistant médical local.")
     parser.add_argument("--model", help="modèle Ollama (défaut : celui de config.toml)")
     parser.add_argument("--config", help="fichier de configuration (défaut : config.toml du projet)")
     parser.add_argument("--db", type=Path, default=Path(".sensai/memory.sqlite3"), help="base SQLite locale")
@@ -76,7 +77,7 @@ def main(argv: list[str] | None = None) -> None:
 
 
 def _conversation(pipeline: Pipeline, context: PatientContext, session_id: str) -> None:
-
+    """Boucle de saisie : exécute les commandes /… ou envoie la question au pipeline."""
     print(f"{DIM}Sensai · {pipeline.client.model} · session {session_id} — {HELP}{RESET}")
     while True:
         try:
@@ -157,7 +158,7 @@ def _conversation(pipeline: Pipeline, context: PatientContext, session_id: str) 
 
 
 def _requested_tools(text: str) -> set[str]:
-    """Limiter les schémas au besoin du tour ; le dossier sélectionné est déjà fourni."""
+    """Choisit par mots-clés les outils proposés au modèle pour ce tour."""
     query = text.casefold()
     names = set()
     if "note" in query and any(word in query for word in ("ajout", "écri", "ecri", "enregistr", "consign")):
@@ -186,6 +187,7 @@ def _check_model(client: OllamaClient) -> None:
 
 
 def _confirm(call_id: str, tool: str, args: dict) -> bool:
+    """Demande au médecin de valider l'action (arguments en clair) ; refus par défaut."""
     print(f"Action proposée : {tool}({json.dumps(args, ensure_ascii=False)})")
     try:
         return input("Confirmer ? [o/N] ").strip().casefold() in {"o", "oui"}

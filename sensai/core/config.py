@@ -29,7 +29,7 @@ class Config:
     num_predict: int = 128
     num_thread: int = 2
     num_batch: int = 64
-    timeout: float = 60
+    timeout: float = 180
 
 
 def load_config(path: str | Path | None = None, model: str | None = None) -> Config:

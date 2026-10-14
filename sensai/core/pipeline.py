@@ -11,7 +11,7 @@ Brancher un vrai module (les autres gardent leur version neutre de defaults.py) 
         ...
 
 Event émis (data EN CLAIR) :
-    token        str : fragment de réponse à afficher
+    token        str : fragment de réponse à afficher (ou CANCELLED après un refus du médecin)
     tool_call    {"id", "tool", "args"}
     confirm      {"id", "tool", "args"} : outil dangereux, juste avant l'appel à confirm()
     tool_result  {"id", "tool", "content", "is_error"}
@@ -33,6 +33,7 @@ from sensai.core.ollama_client import OLLAMA_ERRORS, OllamaClient, describe_erro
 
 MAX_PSEUDONYM_LEN = 24          # au-delà, un « [ » sans « ] » n'est pas un pseudonyme
 REFUSED = "Action refusée par le médecin"
+CANCELLED = "Action annulée à votre demande. Non exécuté : {}."
 
 
 @dataclass
@@ -56,6 +57,7 @@ class Pipeline:
                  sessions: SessionStore | None = None,
                  tools: ToolRegistry | None = None,
                  on_turn: Callable[[TurnRecord], None] | None = None):
+        """Assemble les modules ; ceux non fournis prennent leur version neutre (defaults.py)."""
         self.client = client
         self.system = [{"role": "system", "content": system_prompt}] if system_prompt else []
         self.max_tool_iterations = max_tool_iterations
@@ -78,6 +80,7 @@ class Pipeline:
 
     def _run(self, user_text: str, session_id: str, confirm: ConfirmFn,
              tool_names: set[str] | None) -> Iterator[Event]:
+        """Déroulé du tour : guard, contexte, modèle, outils, puis sauvegarde de la session."""
         start = time.perf_counter()
         guard = self.input_guard.check(user_text)
         if guard.blocked:
@@ -105,8 +108,18 @@ class Pipeline:
                     yield Event("error", f"Arrêt après {self.max_tool_iterations} relances "
                                          "du modèle pour des appels d'outils.")
                     break
+                refused = []
                 for call in reply["tool_calls"]:
-                    turn.append((yield from self._run_tool(call, vault, confirm, tool_names)))
+                    message, approved = yield from self._run_tool(call, vault, confirm, tool_names)
+                    turn.append(message)
+                    if not approved:
+                        refused.append(message["tool_name"])
+                if refused:
+                    # Pas de relance après un refus : relancé, le modèle affirmait « note ajoutée ».
+                    text = CANCELLED.format(", ".join(refused))
+                    yield Event("token", text)
+                    turn.append({"role": "assistant", "content": text})
+                    break
         except OLLAMA_ERRORS as e:
             message = describe_error(e, self.client)
             self._record(session_id, turn[:1], start, usage, message)
@@ -148,18 +161,21 @@ class Pipeline:
             reply["tool_calls"] = _map_strings(tool_calls, vault.mask)
         return reply
 
-    def _run_tool(self, call: dict, vault: PIIVault,
-                  confirm: ConfirmFn, tool_names: set[str] | None = None) -> Generator[Event, None, Message]:
-        """Exécute un appel d'outil en clair ; renvoie le message « tool » pseudonymisé."""
+    def _run_tool(self, call: dict, vault: PIIVault, confirm: ConfirmFn,
+                  tool_names: set[str] | None = None
+                  ) -> Generator[Event, None, tuple[Message, bool]]:
+        """Exécute un appel d'outil en clair ; renvoie (message « tool » masqué, accepté ?)."""
         function = call.get("function", {}) if isinstance(call, dict) else {}
         name = function.get("name", "") if isinstance(function, dict) else ""
         raw_args = function.get("arguments", {}) if isinstance(function, dict) else {}
         if not isinstance(name, str) or not name or not isinstance(raw_args, dict):
             yield Event("error", "Appel d'outil invalide reçu du modèle ; aucune action exécutée.")
-            return {"role": "tool", "tool_name": str(name), "content": "Arguments d'outil invalides."}
+            return {"role": "tool", "tool_name": str(name),
+                    "content": "Arguments d'outil invalides."}, True
         if tool_names is not None and name not in tool_names:
             yield Event("error", f"Outil non autorisé pour ce tour : {name}")
-            return {"role": "tool", "tool_name": name, "content": "Outil non autorisé pour ce tour."}
+            return {"role": "tool", "tool_name": name,
+                    "content": "Outil non autorisé pour ce tour."}, True
         args = vault.reveal_args(raw_args)
         call_id = uuid.uuid4().hex
         yield Event("tool_call", {"id": call_id, "tool": name, "args": args})
@@ -172,16 +188,18 @@ class Pipeline:
 
         yield Event("tool_result", {"id": call_id, "tool": name,
                                     "content": result.content, "is_error": result.is_error})
-        return {"role": "tool", "tool_name": name, "content": vault.mask(result.content)}
+        return {"role": "tool", "tool_name": name, "content": vault.mask(result.content)}, approved
 
     def _call(self, name: str, args: dict) -> ToolResult:
+        """Appelle l'outil ; s'il plante, renvoie un résultat d'erreur au lieu d'arrêter le tour."""
         try:
             return self.tools.call(name, args)
-        except Exception as e:  # un outil qui plante ne doit pas faire tomber le tour
+        except Exception as e:
             return ToolResult(f"Erreur de l'outil {name} : {e}", is_error=True)
 
     def _record(self, session_id: str, messages: list[Message], start: float,
                 usage: dict[str, int], error: str = "") -> None:
+        """Transmet le tour pseudonymisé au hook on_turn (logs EV3), s'il est branché."""
         if self.on_turn:
             self.on_turn(TurnRecord(session_id, self.client.model, messages,
                                     time.perf_counter() - start, usage["prompt_tokens"],
@@ -196,10 +214,12 @@ class _DisplayBuffer:
     """
 
     def __init__(self, reveal: Callable[[str], str]):
+        """Tampon vide ; `reveal` (le coffre) ré-identifie le texte relâché."""
         self.reveal = reveal
         self.pending = ""
 
     def feed(self, text: str) -> str:
+        """Ajoute un fragment ; renvoie la partie affichable, en retenant un « [… » incomplet."""
         self.pending += text
         start = self.pending.rfind("[")
         if start != -1 and _may_become_pseudonym(self.pending[start:]):
@@ -209,6 +229,7 @@ class _DisplayBuffer:
         return self.reveal(ready)
 
     def flush(self) -> str:
+        """Fin de réponse : relâche tout ce qui reste dans le tampon."""
         ready, self.pending = self.pending, ""
         return self.reveal(ready)
 

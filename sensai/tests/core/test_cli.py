@@ -113,12 +113,12 @@ def test_thinking_not_displayed(run_cli):
 
 def test_tool_call_and_result_displayed_on_their_own_lines(run_cli):
     call = {"function": {"name": "add_patient_note", "arguments": {"patient": "Paul"}}}
-    out = run_cli(["Note"], [[ChatChunk(content="Je note."), ChatChunk(tool_calls=[call])],
-                             reply("Fait.")]).out
+    out = run_cli(["Note"], [[ChatChunk(content="Je note."), ChatChunk(tool_calls=[call])]]).out
 
     assert out == (f"Je note.\n{cli.DIM}→ add_patient_note(patient='Paul'){cli.RESET}\n"
                    'Action proposée : add_patient_note({"patient": "Paul"})\n'
-                   f"{cli.DIM}← Action refusée par le médecin{cli.RESET}\nFait.\n\n")
+                   f"{cli.DIM}← Action refusée par le médecin{cli.RESET}\n"
+                   "Action annulée à votre demande. Non exécuté : add_patient_note.\n\n")
 
 
 def test_previous_turns_sent_to_model(run_cli):

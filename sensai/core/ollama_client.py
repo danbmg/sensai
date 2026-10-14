@@ -40,6 +40,7 @@ class OllamaClient:
                  options: dict[str, Any] | None = None,
                  think: bool | None = None, timeout: float = 120.0,
                  keep_alive: int | str | None = None):
+        """Connexion à Ollama et options envoyées à chaque /api/chat."""
         self.model = model
         self.host = host.rstrip("/")
         self.options = options or {}
@@ -128,6 +129,7 @@ def describe_error(e: Exception, client: OllamaClient) -> str:
 
 
 def _lines(resp: requests.Response) -> Iterator[bytes]:
+    """Lit le flux ligne par ligne, en distinguant un timeout d'une coupure."""
     try:
         yield from resp.iter_lines()
     except requests.ConnectionError as e:

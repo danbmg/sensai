@@ -103,6 +103,7 @@ class ModelResult:
 
 
 def build_messages(system_prompt: str, run_index: int) -> list[Message]:
+    """Messages d'un tour : system prompt numéroté, dossier et extraits, question."""
     # Numéro de consultation en tête : empêche Ollama de réutiliser le cache du prompt
     # d'un tour à l'autre, pour mesurer une vraie lecture complète à chaque tour.
     system = f"Consultation n°{run_index + 1}.\n{system_prompt}"
@@ -115,15 +116,18 @@ def build_messages(system_prompt: str, run_index: int) -> list[Message]:
 
 
 def _normalize(text: str) -> str:
+    """Minuscules sans accents, pour trouver un mot quelle que soit sa graphie."""
     return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
 
 
 def answer_ok(text: str) -> bool:
+    """La réponse parle-t-elle de pénicilline ou d'allergie ?"""
     text = _normalize(text)
     return "penicilline" in text or "allerg" in text
 
 
 def tool_ok(tool_calls: list[dict]) -> bool:
+    """add_patient_note a-t-il été appelé pour [PATIENT_1] avec une vraie note ?"""
     for call in tool_calls:
         function = call.get("function", {})
         args = function.get("arguments")
@@ -158,6 +162,7 @@ def _stream(client: OllamaClient, messages: list[Message], start: float, deadlin
 
 
 def run_turn(client: OllamaClient, system_prompt: str, run_index: int, timeout: float) -> Run:
+    """Joue un tour (appel d'outil puis réponse finale) et renvoie ses mesures."""
     stats = {"first": None, "load": 0.0, "prompt_tokens": 0, "prompt_s": 0.0,
              "gen_tokens": 0, "gen_s": 0.0}
     start = time.monotonic()
@@ -188,6 +193,7 @@ def run_turn(client: OllamaClient, system_prompt: str, run_index: int, timeout: 
 
 
 def bench_model(model: str, host: str, system_prompt: str, runs: int, timeout: float) -> ModelResult:
+    """Vérifie les capacités du modèle puis enchaîne `runs` tours mesurés."""
     result = ModelResult(model)
     probe = OllamaClient(model, host, timeout=timeout)
     try:
@@ -213,15 +219,17 @@ def bench_model(model: str, host: str, system_prompt: str, runs: int, timeout: f
 
 
 def _ratio(flags: list[bool]) -> str:
+    """✅ si tous OK, ❌ si aucun, sinon « n/total »."""
     ok = sum(flags)
     return "✅" if ok == len(flags) else "❌" if ok == 0 else f"{ok}/{len(flags)}"
 
 
 def summarize(result: ModelResult, budget: float) -> list[str]:
+    """Ligne du tableau d'un modèle : médianes hors tour à froid, puis verdict."""
     name = f"`{result.model}`" + (" ⚠ thinking" if result.thinking else "")
     if not result.runs or result.status:
         return [name, result.status or "aucune mesure", *[""] * 8]
-    cold, warm = result.runs[0], result.runs[1:] or result.runs   # médiane hors tour à froid
+    cold, warm = result.runs[0], result.runs[1:] or result.runs
     med = lambda attr: statistics.median(getattr(r, attr) for r in warm)
     tools, answers = [r.tool_ok for r in warm], [r.answer_ok for r in warm]
     verdict = all(tools) and all(answers) and med("turn_s") <= budget
@@ -235,11 +243,13 @@ HEADER = ["Modèle", "Verdict", "Tour (s)", "1er fragment (s)", "Chargement à f
 
 
 def format_table(results: list[ModelResult], budget: float) -> str:
+    """Tableau Markdown de tous les modèles mesurés."""
     rows = [HEADER, ["---"] * len(HEADER), *(summarize(r, budget) for r in results)]
     return "\n".join("| " + " | ".join(row) + " |" for row in rows)
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Point d'entrée : vérifie Ollama, mesure chaque modèle, affiche le tableau."""
     parser = argparse.ArgumentParser(description="Mesure les modèles candidats sur le scénario Dupont.")
     parser.add_argument("models", nargs="+", help="modèles Ollama à comparer")
     parser.add_argument("--runs", type=int, default=3, help="tours par modèle, le 1er (à froid) hors médiane")

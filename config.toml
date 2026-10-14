@@ -8,7 +8,9 @@ num_ctx = 2048
 num_predict = 128
 num_thread = 2
 num_batch = 64
-timeout = 60
+# PROPOSITION — à valider à 3 : 60 s coupait l'appel d'outil (modèle rechargé à chaque appel,
+# ~50 s mesurés sur le PC de Dan, au-delà de 60 s avec l'historique). Ctrl+C reste possible.
+timeout = 180
 
 [assistant]
 max_tool_iterations = 2

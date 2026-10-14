@@ -8,7 +8,7 @@ import requests
 from sensai.core.defaults import InMemorySessionStore
 from sensai.core.interfaces import Event, GuardResult, ToolResult
 from sensai.core.ollama_client import ChatChunk
-from sensai.core.pipeline import REFUSED, Pipeline, _DisplayBuffer
+from sensai.core.pipeline import CANCELLED, REFUSED, Pipeline, _DisplayBuffer
 
 # --- Doublures ---
 
@@ -293,16 +293,22 @@ def test_dangerous_tool_emits_confirm_before_asking():
     assert seen[0].data["id"] == seen[1].data["id"] == seen[2].data["id"]
 
 
-def test_refused_tool_not_called_and_model_told():
-    model = FakeModel([tool_call("add_patient_note", patient="P")], ["Je n'ajoute rien."])
-    registry = FakeRegistry()
-    events = run(Pipeline(model, tools=registry), "Note", confirm=Confirm(answer=False))
+def test_refused_tool_not_called_and_model_not_relaunched():
+    model = FakeModel([tool_call("add_patient_note", patient="P")], ["Note ajoutée."])
+    registry, sessions = FakeRegistry(), InMemorySessionStore()
+    events = run(Pipeline(model, tools=registry, sessions=sessions), "Note",
+                 confirm=Confirm(answer=False))
 
     assert registry.calls == []
+    assert len(model.calls) == 1        # relancé, le modèle aurait pu dire « Note ajoutée. »
+    assert types(events) == ["tool_call", "confirm", "tool_result", "token", "usage", "done"]
     assert events[2] == Event("tool_result", {"id": events[0].data["id"], "tool": "add_patient_note",
                                               "content": REFUSED, "is_error": False})
-    assert model.calls[1][-1] == {"role": "tool", "tool_name": "add_patient_note",
-                                  "content": REFUSED}
+    assert tokens(events) == CANCELLED.format("add_patient_note")
+    assert sessions.load("s1").history[-2:] == [
+        {"role": "tool", "tool_name": "add_patient_note", "content": REFUSED},
+        {"role": "assistant", "content": CANCELLED.format("add_patient_note")},
+    ]
 
 
 def test_crashing_tool_becomes_error_result():
