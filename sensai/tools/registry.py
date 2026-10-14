@@ -23,11 +23,15 @@ class AsyncRunner:
         )
         self.thread.start()
 
-    def run(self, coroutine):
+    def run(self, coroutine, timeout: float = 30):
         future: Future = asyncio.run_coroutine_threadsafe(
             coroutine, self.loop
         )
-        return future.result()
+        try:
+            return future.result(timeout=timeout)
+        except TimeoutError:
+            future.cancel()
+            raise TimeoutError("L'opération MCP a dépassé le délai autorisé.") from None
 
     def close(self):
         self.loop.call_soon_threadsafe(self.loop.stop)
