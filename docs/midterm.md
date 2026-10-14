@@ -15,7 +15,7 @@ Le modèle configuré doit être installé. `--model` permet de choisir un autre
 modèle disposant de la capacité `tools`, mais les petits modèles peuvent mal
 former les arguments. Leur sortie doit être répétée avant la présentation.
 Le mode `--mcp` utilise le véritable transport stdio vers un processus médical
-distinct ; les outils développeur ne sont pas exposés au chatbot médical.
+distinct.
 
 Les réglages limitent la génération à 128 tokens, le contexte à 2 048 tokens et
 la charge CPU à deux threads. Ollama décharge le modèle après chaque appel.

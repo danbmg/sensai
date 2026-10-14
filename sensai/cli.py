@@ -18,7 +18,7 @@ from sensai.memory.context import PatientContext
 from sensai.memory.fixtures import seed_demo_patients
 from sensai.memory.patients import PatientStore
 from sensai.memory.sessions import SQLiteSessionStore
-from sensai.runtime import medical_tools
+from sensai.tools.runtime import medical_tools
 
 DIM, RESET = "\033[2m", "\033[0m"
 HELP = "/reset efface la conversation, /quit pour quitter, /help pour les commandes"

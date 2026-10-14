@@ -16,20 +16,13 @@ class MCPClientError(Exception):
 class MCPClient:
     def __init__(
         self,
-        workspace: str = ".",
+        args: list[str],
+        name: str,
         command: str | None = None,
-        args: list[str] | None = None,
-        name: str = "developer",
     ):
-        self.workspace = workspace
         self.name = name
         self.command = command or sys.executable
-        self.args = args if args is not None else [
-            "-m",
-            "sensai.mcp_server.server",
-            "--workspace",
-            workspace,
-        ]
+        self.args = args
 
         self._session: ClientSession | None = None
         self._session_task: asyncio.Task | None = None
