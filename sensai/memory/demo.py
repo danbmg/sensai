@@ -34,7 +34,7 @@ def demonstrate(path: Path) -> None:
     sessions.save("demo-session", state)
     restored = SQLiteSessionStore(path).load("demo-session")
     print(f"Session reprise : {len(restored.history)} messages, coffre PII conservé : {restored.pii_map == state.pii_map}")
-    print("Cette démo vérifie le stockage. Le chatbot actuel doit encore être branché par Dan/Matteo.")
+    print("Cette démo vérifie le stockage. Pour le chatbot intégré : python -m sensai --demo --mcp")
 
 
 def main() -> None:

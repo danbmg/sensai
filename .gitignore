@@ -19,3 +19,4 @@ venv/
 
 # Généré à l'exécution
 logs/
+.sensai/

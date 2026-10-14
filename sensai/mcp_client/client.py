@@ -116,7 +116,8 @@ class MCPClient:
             {
                 "name": tool.name,
                 "description": tool.description or "",
-                "parameters": getattr(tool, "inputSchema", None)
+                "parameters": getattr(tool, "input_schema", None)
+                or getattr(tool, "inputSchema", None)
                 or {"type": "object", "properties": {}},
             }
             for tool in response.tools
@@ -140,7 +141,7 @@ class MCPClient:
                 f"Erreur MCP pour '{name}': {error}"
             ) from error
 
-        if getattr(result, "isError", False):
+        if getattr(result, "is_error", False) or getattr(result, "isError", False):
             messages = [
                 item.text
                 for item in result.content
@@ -150,9 +151,9 @@ class MCPClient:
                 "\n".join(messages) or "Erreur MCP inconnue."
             )
 
-        structured = getattr(
-            result, "structuredContent", None
-        )
+        structured = getattr(result, "structured_content", None)
+        if structured is None:
+            structured = getattr(result, "structuredContent", None)
         if structured is not None:
             return structured
 
@@ -187,7 +188,7 @@ async def register_mcp_tools(
     client: MCPClient,
     registry,
     prefix: str = "",
-    dangerous: bool = True,
+    dangerous: bool | set[str] = True,
 ) -> None:
     """Enregistre les outils MCP dans le ToolRegistry."""
     tools = await client.list_tools()
@@ -210,5 +211,5 @@ async def register_mcp_tools(
             parameters=tool["parameters"],
             function=execute_mcp_tool,
             source=f"mcp:{client.name}",
-            dangerous=dangerous,
+            dangerous=dangerous if isinstance(dangerous, bool) else original_name in dangerous,
         )

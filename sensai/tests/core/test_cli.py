@@ -62,7 +62,7 @@ def run_cli(monkeypatch, capsys, config_file):
                 raise line
             return line
         monkeypatch.setattr("builtins.input", fake_input)
-        cli.main(["--config", str(config_file), *argv])
+        cli.main(["--config", str(config_file), "--db", str(config_file.parent / "test.sqlite3"), *argv])
         captured = capsys.readouterr()
         return SimpleNamespace(out=captured.out.split("\n", 1)[1], err=captured.err)
     return run
@@ -82,7 +82,8 @@ def test_uses_config_file(run_cli):
     run_cli(["Salut"], [[]])
 
     assert (FakeClient.model, FakeClient.host) == ("llama3.2:3b", "http://h:1")
-    assert FakeClient.options == {"temperature": 0.1}
+    assert FakeClient.options == {"temperature": 0.1, "num_ctx": 2048, "num_predict": 128,
+                                 "num_thread": 2, "num_batch": 64}
     assert FakeClient.calls == [[SYSTEM, {"role": "user", "content": "Salut"}]]
 
 
@@ -116,7 +117,8 @@ def test_tool_call_and_result_displayed_on_their_own_lines(run_cli):
                              reply("Fait.")]).out
 
     assert out == (f"Je note.\n{cli.DIM}→ add_patient_note(patient='Paul'){cli.RESET}\n"
-                   f"{cli.DIM}← Outil inconnu : add_patient_note{cli.RESET}\nFait.\n\n")
+                   'Action proposée : add_patient_note({"patient": "Paul"})\n'
+                   f"{cli.DIM}← Action refusée par le médecin{cli.RESET}\nFait.\n\n")
 
 
 def test_previous_turns_sent_to_model(run_cli):

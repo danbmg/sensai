@@ -6,8 +6,8 @@ Disponible : API Python CRUD SQLite des patients, trois patients fictifs, stocka
 persistant des sessions conforme à `SessionStore`, démo autonome et tests du stockage.
 
 À faire : profil médecin et injection au démarrage, RAG R1, puis bonus R2.
-Le chatbot actuel utilise encore les implémentations neutres : cette livraison
-n'active pas les outils, les protections PII ni la reprise depuis la CLI.
+L'intégration midterms branche maintenant les sessions SQLite, le contexte patient,
+les protections PII et les outils patients à la CLI. Voir `docs/midterm.md`.
 
 ## Démonstration
 
@@ -35,7 +35,7 @@ Relancer la démo sur la même base préserve les patients existants et ajoute u
 nouvelle note de démonstration ; elle remplace la session réservée `demo-session`.
 Utiliser un fichier dédié à la démo, hors du dépôt.
 
-## API à brancher par Matteo
+## API utilisée par les outils patients
 
 ```python
 from sensai.memory.patients import PatientStore
@@ -71,12 +71,13 @@ Erreurs publiques : `PatientNotFoundError` si le patient est absent,
 existe déjà. Une recherche partielle ne peut pas déclencher directement une écriture.
 Avec plusieurs résultats, demander une précision puis utiliser `patient_id`.
 
-Matteo doit adapter ces méthodes à `ToolRegistry`, fournir les schémas des outils,
-convertir résultats/erreurs en `ToolResult` et marquer les écritures comme dangereuses.
+`sensai/tools/patient_tools.py` adapte ces méthodes à `ToolRegistry`, fournit les
+schémas, convertit résultats/erreurs en `ToolResult` et marque les écritures comme
+dangereuses. Le serveur `sensai/mcp_server/medical.py` expose les outils via MCP.
 Le pipeline reçoit et transmet les arguments des outils en clair après
 réidentification. Aucun appel Ollama ou MCP n'est effectué par cette API.
 
-## SessionStore à brancher par Dan
+## SessionStore utilisé par la CLI
 
 ```python
 from sensai.memory.sessions import SQLiteSessionStore
@@ -91,9 +92,9 @@ sessions = SQLiteSessionStore("/tmp/sensai-midterm.sqlite3")
 `list_sessions()` retourne les identifiants triés. Les données rechargées sont
 indépendantes : elles ne sont modifiées en base qu'après `save()`.
 
-Dan doit permettre de sélectionner/reprendre un identifiant dans la CLI ou le web,
-injecter ce stockage au pipeline et fournir la confirmation humaine des écritures.
-Matteo doit brancher le vrai `PIIVault` : le stockage sauvegarde le contrat reçu,
+La CLI permet de sélectionner/reprendre un identifiant avec `--session` ou `/session`,
+injecte ce stockage au pipeline et demande confirmation avant les écritures.
+Le vrai `PIIVault` est branché : le stockage sauvegarde le contrat reçu,
 il ne pseudonymise pas les messages lui-même. SQLite contient le coffre PII local
 en clair, conformément au contrat ; aucun chiffrement n'est implémenté.
 
@@ -107,7 +108,8 @@ Les deux stockages peuvent partager un fichier, avec des tables distinctes.
 
 Cette version ne propose pas de migrations de schéma, de comptes médecins,
 d'horodatage/auteur des notes ou d'audit des modifications. Le profil médecin
-et `ContextProvider` restent à implémenter dans la partie de Timothée.
+reste à implémenter dans la partie de Timothée. `PatientContext` fournit le dossier
+sélectionné via `ContextProvider` ; la partie documentaire RAG reste à développer.
 
 ## Vérification
 

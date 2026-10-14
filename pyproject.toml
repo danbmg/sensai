@@ -1,4 +1,4 @@
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "sensai/tests"]
 pythonpath = ["."]
 addopts = "--import-mode=importlib"

@@ -67,8 +67,17 @@ class Pipeline:
         self.tools = tools or EmptyRegistry()
         self.on_turn = on_turn
 
-    def run(self, user_text: str, session_id: str, confirm: ConfirmFn) -> Iterator[Event]:
+    def run(self, user_text: str, session_id: str, confirm: ConfirmFn, *,
+            tool_names: set[str] | None = None) -> Iterator[Event]:
         """Un tour complet. `user_text` arrive en clair ; les Event repartent en clair."""
+        try:
+            yield from self._run(user_text, session_id, confirm, tool_names)
+        except Exception as error:
+            # Une erreur de stockage/contexte/outil mal formé ne ferme pas la CLI.
+            yield Event("error", f"Tour interrompu : {error}")
+
+    def _run(self, user_text: str, session_id: str, confirm: ConfirmFn,
+             tool_names: set[str] | None) -> Iterator[Event]:
         start = time.perf_counter()
         guard = self.input_guard.check(user_text)
         if guard.blocked:
@@ -86,7 +95,7 @@ class Pipeline:
         try:
             for iteration in range(self.max_tool_iterations + 1):
                 reply = yield from self._ask(self.system + context + state.history + turn,
-                                             vault, usage)
+                                             vault, usage, tool_names)
                 turn.append(reply)
                 if "tool_calls" not in reply:
                     break
@@ -97,7 +106,7 @@ class Pipeline:
                                          "du modèle pour des appels d'outils.")
                     break
                 for call in reply["tool_calls"]:
-                    turn.append((yield from self._run_tool(call, vault, confirm)))
+                    turn.append((yield from self._run_tool(call, vault, confirm, tool_names)))
         except OLLAMA_ERRORS as e:
             message = describe_error(e, self.client)
             self._record(session_id, turn[:1], start, usage, message)
@@ -112,11 +121,14 @@ class Pipeline:
         yield Event("done")
 
     def _ask(self, messages: list[Message], vault: PIIVault,
-             usage: dict[str, int]) -> Generator[Event, None, Message]:
+             usage: dict[str, int], tool_names: set[str] | None = None) -> Generator[Event, None, Message]:
         """Un appel au modèle : émet les fragments en clair, renvoie la réponse pseudonymisée."""
         display = _DisplayBuffer(vault.reveal)
         content, tool_calls = "", []
-        stream = self.client.chat_stream(messages, self.tools.schemas() or None)
+        schemas = self.tools.schemas()
+        if tool_names is not None:
+            schemas = [schema for schema in schemas if schema["function"]["name"] in tool_names]
+        stream = self.client.chat_stream(messages, schemas or None)
         try:
             for chunk in stream:
                 if text := display.feed(chunk.content):
@@ -137,10 +149,18 @@ class Pipeline:
         return reply
 
     def _run_tool(self, call: dict, vault: PIIVault,
-                  confirm: ConfirmFn) -> Generator[Event, None, Message]:
+                  confirm: ConfirmFn, tool_names: set[str] | None = None) -> Generator[Event, None, Message]:
         """Exécute un appel d'outil en clair ; renvoie le message « tool » pseudonymisé."""
-        name = call["function"]["name"]
-        args = vault.reveal_args(call["function"].get("arguments") or {})
+        function = call.get("function", {}) if isinstance(call, dict) else {}
+        name = function.get("name", "") if isinstance(function, dict) else ""
+        raw_args = function.get("arguments", {}) if isinstance(function, dict) else {}
+        if not isinstance(name, str) or not name or not isinstance(raw_args, dict):
+            yield Event("error", "Appel d'outil invalide reçu du modèle ; aucune action exécutée.")
+            return {"role": "tool", "tool_name": str(name), "content": "Arguments d'outil invalides."}
+        if tool_names is not None and name not in tool_names:
+            yield Event("error", f"Outil non autorisé pour ce tour : {name}")
+            return {"role": "tool", "tool_name": name, "content": "Outil non autorisé pour ce tour."}
+        args = vault.reveal_args(raw_args)
         call_id = uuid.uuid4().hex
         yield Event("tool_call", {"id": call_id, "tool": name, "args": args})
 
@@ -200,7 +220,7 @@ def _may_become_pseudonym(text: str) -> bool:
     body = text[1:]
     return any(f"{t}_".startswith(body)                                # « [PAT », « [PATIENT_ »
                or (body.startswith(f"{t}_") and body[len(t) + 1:].isdigit())  # « [PATIENT_1 »
-               for t in PSEUDONYM_TYPES)
+               for t in (*PSEUDONYM_TYPES, "TELEPHONE"))
 
 
 def _map_strings(value: Any, fn: Callable[[str], str]) -> Any:

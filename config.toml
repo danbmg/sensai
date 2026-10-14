@@ -1,11 +1,17 @@
 [model]
-# PROPOSITION — à valider à 3 (bench du 2026-10-05, voir bench_models.py)
+# Modèle du benchmark, installé et vérifié pour la démo midterms.
 name = "qwen2.5:3b"
 host = "http://localhost:11434"
 temperature = 0.2
+# Réglages CPU prudents : moins de mémoire et de charge pendant la soutenance.
+num_ctx = 2048
+num_predict = 128
+num_thread = 2
+num_batch = 64
+timeout = 60
 
 [assistant]
-max_tool_iterations = 5
+max_tool_iterations = 2
 system_prompt = """
 Tu es Sensai, l'assistant d'un cabinet médical. Tu tournes entièrement en local.
 Réponds en français, de façon brève et factuelle.

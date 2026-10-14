@@ -6,6 +6,9 @@ pour permettre la restauration de la session.
 """
 
 import re
+from collections import Counter
+
+from sensai.core.interfaces import PSEUDONYM_TYPES
 
 
 class SensaiPIIVault:
@@ -23,7 +26,7 @@ class SensaiPIIVault:
             r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"
             r"(?![\w.-])"
         ),
-        "TELEPHONE": re.compile(
+        "TEL": re.compile(
             r"(?<!\d)"
             r"(?:\+33[\s.-]?[1-9]|0[1-9])"
             r"(?:[\s.-]?\d{2}){4}"
@@ -31,18 +34,26 @@ class SensaiPIIVault:
         ),
         "NAISSANCE": re.compile(
             r"\b(?:né|née)\s+le\s+"
-            r"(?P<date>\d{2}/\d{2}/\d{4})\b"
+            r"(?P<date>\d{2}/\d{2}/\d{4}|\d{4}-\d{2}-\d{2})\b"
             r"|\bdate\s+de\s+naissance\s*[:=]?\s*"
-            r"(?P<date_alt>\d{2}/\d{2}/\d{4})\b",
+            r"(?P<date_alt>\d{2}/\d{2}/\d{4}|\d{4}-\d{2}-\d{2})\b",
             re.IGNORECASE,
+        ),
+        "PATIENT": re.compile(
+            r"\b(?:Mme\.?|Madame|Monsieur|M\.)\s+"
+            r"[A-ZÀ-ÖØ-Þ][a-zà-öø-ÿ'-]+(?:\s+[A-ZÀ-ÖØ-Þ][a-zà-öø-ÿ'-]+)?"
+        ),
+        "ADRESSE": re.compile(
+            r"\b\d{1,4}\s+(?:rue|avenue|boulevard|chemin|impasse|place)\s+"
+            r"[^\n.;]+", re.IGNORECASE,
         ),
     }
 
     PLACEHOLDER_PATTERN = re.compile(
-        r"\[(?:NIR|EMAIL|TELEPHONE|NAISSANCE)_\d+\]"
+        r"\[(?:" + "|".join((*PSEUDONYM_TYPES, "TELEPHONE")) + r")_\d+\]"
     )
 
-    def __init__(self, pii_map: dict[str, str] | None = None):
+    def __init__(self, pii_map: dict[str, str] | None = None, *, patients: list[dict] | None = None):
         # Convention : {"[EMAIL_1]": "patient@example.com"}
         self.pii_map = dict(pii_map or {})
 
@@ -52,6 +63,30 @@ class SensaiPIIVault:
         }
 
         self._counters = {}
+        self._entities = []
+        patients = patients or []
+        surnames = Counter(patient["name"].split()[-1].casefold() for patient in patients)
+        for patient in patients:
+            name = patient["name"]
+            if identifier := patient.get("patient_id"):
+                self._entities.append((identifier, name, "PATIENT"))
+            variants = [name]
+            surname = name.split()[-1]
+            if surnames[surname.casefold()] == 1:
+                variants.append(surname)
+            for variant in variants:
+                for prefix in ("Mme ", "Mme. ", "Madame ", "Monsieur ", "M. ", ""):
+                    self._entities.append((prefix + variant, name, "PATIENT"))
+            if date := patient.get("birth_date"):
+                self._entities.append((date, date, "NAISSANCE"))
+                if re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+                    self._entities.append((f"{date[8:10]}/{date[5:7]}/{date[:4]}", date, "NAISSANCE"))
+        # Les valeurs déjà connues restent masquées même sans le préfixe initial.
+        for placeholder, original in self.pii_map.items():
+            match = re.fullmatch(r"\[([A-Z]+)_\d+\]", placeholder)
+            if match:
+                self._entities.append((original, original, match[1]))
+        self._entities.sort(key=lambda entity: len(entity[0]), reverse=True)
 
         for placeholder in self.pii_map:
             match = re.fullmatch(
@@ -90,6 +125,12 @@ class SensaiPIIVault:
         if not isinstance(text, str):
             raise TypeError("Le texte doit être une chaîne de caractères.")
 
+        # Normaliser les pseudonymes connus si le modèle omet leurs crochets.
+        for placeholder in self.pii_map:
+            if self.PLACEHOLDER_PATTERN.fullmatch(placeholder):
+                text = re.sub(r"(?<![\w\[])" + re.escape(placeholder[1:-1]) + r"(?![\w\]])",
+                              lambda match, value=placeholder: value, text)
+
         # On protège les pseudonymes déjà présents dans le texte.
         protected = {}
 
@@ -99,6 +140,13 @@ class SensaiPIIVault:
             return marker
 
         result = self.PLACEHOLDER_PATTERN.sub(protect, text)
+
+        for variant, original, category in self._entities:
+            result = re.sub(
+                r"(?<!\w)" + re.escape(variant) + r"(?!\w)",
+                lambda match, value=original, kind=category: self._register(value, kind),
+                result, flags=re.IGNORECASE,
+            )
 
         for category, pattern in self.PATTERNS.items():
             if category == "NAISSANCE":
