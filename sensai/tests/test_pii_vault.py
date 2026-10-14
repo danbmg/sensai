@@ -21,7 +21,7 @@ class TestPIIVault(unittest.TestCase):
         )
         self.assertEqual(
             result,
-            "Téléphone : [TELEPHONE_1]",
+            "Téléphone : [TEL_1]",
         )
 
     def test_mask_nir(self):
