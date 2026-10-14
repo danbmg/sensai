@@ -68,3 +68,17 @@ def test_project_config_is_valid_and_avoids_thinking_tag():
     assert DEFAULT_PATH.name == "config.toml"
     assert cfg.system_prompt
     assert cfg.model != "qwen3:4b"   # Qwen3-4B-Thinking : réfléchit toujours, voir CLAUDE.md
+
+
+@pytest.mark.parametrize("text", [
+    'model = "bad"',
+    '[model]\nname = 123',
+    '[model]\nname = "m"\nhost = 123',
+    '[model]\nname = "m"\nnum_thread = 0',
+    '[model]\nname = "m"\ntemperature = nan',
+    '[model]\nname = "m"\ntimeout = inf',
+    '[model]\nname = "m"\n[assistant]\nsystem_prompt = 123',
+])
+def test_invalid_configuration_reports_config_error(write_config, text):
+    with pytest.raises(ConfigError):
+        load_config(write_config(text))
