@@ -16,7 +16,7 @@ Acceptance criteria:
 
 ## Timothée — M1, M3, R1, R2
 
-### M1 — Reprendre une session (stockage livré, interface à brancher)
+### M1 — Reprendre une session (livré avec SQLite et la CLI)
 
 As a médecin, I want to reprendre une conversation après redémarrage, so that je puisse poursuivre mon travail sans ressaisir les échanges précédents.
 Acceptance criteria:
@@ -32,7 +32,7 @@ Acceptance criteria:
 - Le profil sélectionné est injecté dans le contexte initial de la conversation.
 - Une modification du profil est prise en compte à l'ouverture d'une nouvelle conversation.
 
-### M3 — Consulter un dossier (API livrée, outil à brancher)
+### M3 — Consulter un dossier (livré avec API, contexte et outils locaux/MCP)
 
 As a médecin, I want to retrouver les allergies, traitements et antécédents d'un patient, so that je dispose des informations enregistrées pour ma consultation.
 Acceptance criteria:
@@ -40,7 +40,7 @@ Acceptance criteria:
 - La recherche par nom retourne tous les patients correspondants sans sélectionner arbitrairement un homonyme.
 - Le jeu fictif contient Mme Jeanne Dupont avec une allergie à la pénicilline.
 
-### M3 — Mettre à jour un dossier (API livrée, validation humaine à brancher)
+### M3 — Mettre à jour un dossier (livré avec validation humaine)
 
 As a médecin, I want to ajouter une note et corriger les données d'un dossier, so that les informations restent disponibles lors des consultations suivantes.
 Acceptance criteria:
