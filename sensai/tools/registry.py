@@ -68,22 +68,6 @@ class ToolRegistry:
             "dangerous": dangerous,
         }
 
-    def has_tool(self, name: str) -> bool:
-        return name in self._tools
-
-    def list_tools(self) -> list[str]:
-        return list(self._tools)
-
-    def describe_tools(self) -> list[dict]:
-        return [
-            {
-                "name": tool["name"],
-                "source": tool["source"],
-                "dangerous": tool["dangerous"],
-            }
-            for tool in self._tools.values()
-        ]
-
     def schemas(self) -> list[dict]:
         """Schémas des outils au format attendu par Ollama."""
         return [
@@ -97,10 +81,6 @@ class ToolRegistry:
             }
             for tool in self._tools.values()
         ]
-
-    def ollama_tools(self) -> list[dict]:
-        """Alias conservé pour l'ancien code."""
-        return self.schemas()
 
     def is_dangerous(self, name: str) -> bool:
         # Par sécurité, un outil inconnu nécessite confirmation.

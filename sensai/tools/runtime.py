@@ -17,13 +17,13 @@ def medical_tools(patients, use_mcp: bool = False):
         return
 
     try:
-        from sensai.mcp_client.client import MCPClient, register_mcp_tools
+        from sensai.tools.mcp_client import MCPClient, register_mcp_tools
     except ImportError as error:
         raise RuntimeError("MCP absent : installez requirements.txt dans votre environnement Python.") from error
     runner = AsyncRunner()
     registry = ToolRegistry(runner)
     register_basic_tools(registry)
-    client = MCPClient(name="medical", args=["-m", "sensai.mcp_server.medical",
+    client = MCPClient(name="medical", args=["-m", "sensai.tools.mcp_server",
                        "--db", str(patients.path.resolve())])
     try:
         async def connect():

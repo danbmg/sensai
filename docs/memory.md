@@ -73,7 +73,7 @@ Avec plusieurs résultats, demander une précision puis utiliser `patient_id`.
 
 `sensai/tools/patient_tools.py` adapte ces méthodes à `ToolRegistry`, fournit les
 schémas, convertit résultats/erreurs en `ToolResult` et marque les écritures comme
-dangereuses. Le serveur `sensai/mcp_server/medical.py` expose les outils via MCP.
+dangereuses. Le serveur `sensai/tools/mcp_server.py` expose les outils via MCP.
 Le pipeline reçoit et transmet les arguments des outils en clair après
 réidentification. Aucun appel Ollama ou MCP n'est effectué par cette API.
 
