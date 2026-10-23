@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sensai · Métriques</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="metrics-page">
+  <header class="topbar">
+    <div class="brand"><span class="logo" aria-hidden="true">✚</span> Sensai <small>métriques des logs (EV3)</small></div>
+    <nav class="top-actions"><a class="ghost button" href="./">Retour à la consultation</a></nav>
+  </header>
+
+  <main class="dashboard">
+    <div class="filter-row" role="group" aria-label="Période">
+      <button type="button" data-days="1">Aujourd'hui</button>
+      <button type="button" data-days="7">7 jours</button>
+      <button type="button" data-days="30">30 jours</button>
+      <button type="button" data-days="" class="selected">Tout</button>
+      <span id="source-note" class="muted small"></span>
+    </div>
+
+    <p id="empty" class="panel muted" hidden></p>
+
+    <section id="content" class="dashboard-body">
+      <div class="kpis" id="kpis"></div>
+
+      <div class="charts">
+        <figure class="panel chart-card">
+          <figcaption><strong>Latence moyenne par jour</strong><span class="muted small"> · tours aboutis, en secondes</span></figcaption>
+          <div class="chart" id="latency-chart"></div>
+        </figure>
+        <figure class="panel chart-card">
+          <figcaption><strong>Tours par jour</strong><span class="muted small"> · erreurs et refus compris</span></figcaption>
+          <div class="chart" id="volume-chart"></div>
+        </figure>
+      </div>
+
+      <figure class="panel chart-card">
+        <figcaption><strong>Latence moyenne par configuration</strong>
+          <span class="muted small"> · un prompt ou un paramètre modifié crée une nouvelle configuration ; la configuration en vigueur est en couleur</span></figcaption>
+        <div class="chart" id="config-chart"></div>
+      </figure>
+
+      <div class="tables">
+        <section class="panel">
+          <h2>Par modèle</h2>
+          <div class="table-wrap"><table id="model-table"></table></div>
+        </section>
+        <section class="panel">
+          <h2>Par configuration</h2>
+          <div class="table-wrap"><table id="config-table"></table></div>
+        </section>
+      </div>
+
+      <section class="panel">
+        <h2>Derniers tours</h2>
+        <div class="table-wrap"><table id="recent-table"></table></div>
+      </section>
+    </section>
+  </main>
+
+  <div id="tooltip" class="tooltip" role="status" hidden></div>
+  <script src="common.js"></script>
+  <script src="metrics.js"></script>
+</body>
+</html>
