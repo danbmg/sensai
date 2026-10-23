@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sensai</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="logo" aria-hidden="true">✚</span> Sensai <small>assistant médical local</small></div>
+    <label class="model-picker">Modèle
+      <select id="model-select" aria-label="Modèle Ollama"></select>
+    </label>
+    <div id="status-chips" class="chips" aria-live="polite"></div>
+    <nav class="top-actions">
+      <button id="settings-open" class="ghost" type="button">Réglages</button>
+      <a class="ghost button" href="metrics.html" target="_blank" rel="noopener">Métriques</a>
+    </nav>
+  </header>
+
+  <div id="model-banner" class="banner" hidden></div>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <section class="panel">
+        <h2>Nouvelle consultation</h2>
+        <form id="new-session">
+          <label>Patient
+            <select id="patient-select"><option value="">Aucun dossier</option></select>
+          </label>
+          <label>Profil médecin
+            <select id="profile-select"></select>
+          </label>
+          <button type="submit" class="primary">Ouvrir</button>
+        </form>
+      </section>
+      <section class="panel grow">
+        <h2>Consultations</h2>
+        <ul id="session-list" class="session-list"></ul>
+      </section>
+    </aside>
+
+    <main class="chat">
+      <div id="patient-header" class="patient-header">
+        <p class="muted">Ouvrez ou reprenez une consultation pour commencer.</p>
+      </div>
+      <div id="messages" class="messages" aria-live="polite"></div>
+      <form id="composer" class="composer">
+        <textarea id="message-input" rows="2" placeholder="Posez une question… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne)" disabled></textarea>
+        <div class="composer-actions">
+          <button id="stop" type="button" class="danger" hidden>Arrêter</button>
+          <button id="send" type="submit" class="primary" disabled>Envoyer</button>
+        </div>
+      </form>
+    </main>
+
+    <aside class="inspector">
+      <section class="panel">
+        <h2>Contexte du modèle</h2>
+        <div class="gauge" role="img" id="gauge" aria-label="Occupation du contexte">
+          <div class="gauge-fill" id="gauge-fill"></div>
+        </div>
+        <p id="gauge-label" class="muted small">Aucun tour pour l'instant.</p>
+        <p id="usage-label" class="muted small"></p>
+        <button id="prompt-open" type="button" class="ghost wide" disabled>Voir le prompt envoyé</button>
+      </section>
+      <section class="panel">
+        <h2>Sources du dernier tour</h2>
+        <ol id="sources" class="sources"><li class="muted small">Aucune source.</li></ol>
+      </section>
+      <section class="panel">
+        <h2>Filtres documentaires</h2>
+        <form id="filters" class="filters">
+          <label>Éditeur
+            <select id="filter-publisher">
+              <option value="">Tous</option><option>ANSM</option><option>HAS</option>
+            </select>
+          </label>
+          <label>Étiquettes <input id="filter-tags" placeholder="antibiotiques, allergie"></label>
+          <button type="submit" class="ghost wide" disabled>Appliquer</button>
+        </form>
+      </section>
+      <section class="panel">
+        <h2>Outils</h2>
+        <ul id="tools" class="tools"></ul>
+      </section>
+    </aside>
+  </div>
+
+  <dialog id="confirm-dialog" class="dialog">
+    <form method="dialog">
+      <h2>Action à valider</h2>
+      <p>L'assistant propose de modifier le dossier. Rien n'est écrit sans votre accord.</p>
+      <p class="tool-name" id="confirm-tool"></p>
+      <dl id="confirm-args" class="args"></dl>
+      <p class="muted small" id="confirm-countdown"></p>
+      <div class="dialog-actions">
+        <button value="refuse" class="ghost" id="confirm-refuse">Refuser</button>
+        <button value="approve" class="primary" id="confirm-approve">Valider</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="prompt-dialog" class="dialog wide-dialog">
+    <form method="dialog">
+      <h2>Prompt exact du dernier tour</h2>
+      <p class="muted small" id="prompt-meta"></p>
+      <pre id="prompt-body" class="prompt-body"></pre>
+      <div class="dialog-actions"><button value="close" class="primary">Fermer</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="settings-dialog" class="dialog">
+    <form id="settings-form" method="dialog">
+      <h2>Réglages du modèle</h2>
+      <p class="muted small">Appliqués tout de suite, sans redémarrer ; config.toml n'est pas modifié.</p>
+      <label>Température <input name="temperature" type="number" min="0" step="0.1"></label>
+      <label>Tokens générés au plus (num_predict) <input name="num_predict" type="number" min="1" step="1"></label>
+      <label>Taille du contexte (num_ctx) <input name="num_ctx" type="number" min="256" step="256"></label>
+      <label>Tours d'historique envoyés (0 = tous) <input name="max_history_turns" type="number" min="0" step="1"></label>
+      <label>Relances après outil <input name="max_tool_iterations" type="number" min="0" step="1"></label>
+      <p id="settings-error" class="error small" hidden></p>
+      <div class="dialog-actions">
+        <button value="cancel" class="ghost" formnovalidate>Annuler</button>
+        <button value="save" class="primary" id="settings-save">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="common.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

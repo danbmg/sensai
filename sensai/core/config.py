@@ -25,6 +25,7 @@ class Config:
     temperature: float = 0.2
     system_prompt: str = ""
     max_tool_iterations: int = 5
+    max_history_turns: int = 0      # tours d'historique envoyés au modèle (0 = tous)
     num_ctx: int = 2048
     num_predict: int = 128
     num_thread: int = 2
@@ -52,36 +53,42 @@ def load_config(path: str | Path | None = None, model: str | None = None) -> Con
     name = model or model_section.get("name")
     if not name:
         raise ConfigError(f"{path} : [model] name manquant")
-    if not isinstance(name, str) or not name.strip():
-        raise ConfigError("name doit être un texte non vide")
-    host = model_section.get("host", Config.host)
     prompt = assistant_section.get("system_prompt", Config.system_prompt)
-    temperature = model_section.get("temperature", Config.temperature)
-    if not isinstance(host, str) or not host.startswith(("http://", "https://")):
-        raise ConfigError("host doit être une URL HTTP ou HTTPS")
     if not isinstance(prompt, str):
         raise ConfigError("system_prompt doit être du texte")
-    if not isinstance(temperature, (int, float)) or isinstance(temperature, bool) or not math.isfinite(temperature) or temperature < 0:
-        raise ConfigError("temperature doit être un nombre positif ou nul")
     cfg = Config(
         model=name,
-        host=host,
-        temperature=temperature,
+        host=model_section.get("host", Config.host),
+        temperature=model_section.get("temperature", Config.temperature),
         system_prompt=prompt.strip(),
         max_tool_iterations=assistant_section.get("max_tool_iterations",
                                                   Config.max_tool_iterations),
+        max_history_turns=assistant_section.get("max_history_turns", Config.max_history_turns),
         num_ctx=model_section.get("num_ctx", Config.num_ctx),
         num_predict=model_section.get("num_predict", Config.num_predict),
         num_thread=model_section.get("num_thread", Config.num_thread),
         num_batch=model_section.get("num_batch", Config.num_batch),
         timeout=model_section.get("timeout", Config.timeout),
     )
+    validate_config(cfg)
+    return cfg
+
+
+def validate_config(cfg: Config) -> None:
+    """Vérifie chaque réglage ; sert aussi aux changements faits depuis le web (PUT /api/config)."""
+    if not isinstance(cfg.model, str) or not cfg.model.strip():
+        raise ConfigError("name doit être un texte non vide")
+    if not isinstance(cfg.host, str) or not cfg.host.startswith(("http://", "https://")):
+        raise ConfigError("host doit être une URL HTTP ou HTTPS")
+    if not isinstance(cfg.temperature, (int, float)) or isinstance(cfg.temperature, bool) or not math.isfinite(cfg.temperature) or cfg.temperature < 0:
+        raise ConfigError("temperature doit être un nombre positif ou nul")
     for field in ("num_ctx", "num_predict", "num_thread", "num_batch"):
         value = getattr(cfg, field)
         if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
             raise ConfigError(f"{field} doit être un entier positif")
-    if not isinstance(cfg.max_tool_iterations, int) or isinstance(cfg.max_tool_iterations, bool) or cfg.max_tool_iterations < 0:
-        raise ConfigError("max_tool_iterations doit être un entier positif ou nul")
+    for field in ("max_tool_iterations", "max_history_turns"):
+        value = getattr(cfg, field)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise ConfigError(f"{field} doit être un entier positif ou nul")
     if not isinstance(cfg.timeout, (int, float)) or isinstance(cfg.timeout, bool) or not math.isfinite(cfg.timeout) or cfg.timeout <= 0:
         raise ConfigError("timeout doit être un nombre positif")
-    return cfg

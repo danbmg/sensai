@@ -126,18 +126,40 @@ class PatientStore(SQLiteDatabase):
         return self.get_patient(patient_id)
 
     def add_patient_note(self, reference: str, note: str) -> dict:
-        self._validate({"notes": [note]})
+        # Les notes forment un journal : une note répétée est conservée.
+        return self._edit_list(reference, "notes", note, lambda notes: [*notes, note.strip()])
+
+    def add_entry(self, reference: str, field: str, value: str) -> dict:
+        """Ajoute un élément à une liste du dossier ; un doublon (casse ignorée) est ignoré."""
+        def add(items: list[str]) -> list[str]:
+            known = {item.casefold() for item in items}
+            return items if value.strip().casefold() in known else [*items, value.strip()]
+        return self._edit_list(reference, field, value, add)
+
+    def remove_entry(self, reference: str, field: str, value: str) -> dict:
+        """Retire un élément d'une liste du dossier (texte exact, casse ignorée)."""
+        def remove(items: list[str]) -> list[str]:
+            kept = [item for item in items if item.casefold() != value.strip().casefold()]
+            if len(kept) == len(items):
+                raise LookupError(f"Élément absent de {field} : {value.strip()}")
+            return kept
+        return self._edit_list(reference, field, value, remove)
+
+    def _edit_list(self, reference: str, field: str, value: str, edit) -> dict:
+        if field not in self.LIST_FIELDS:
+            raise ValueError(f"Liste attendue : {', '.join(sorted(self.LIST_FIELDS))}")
+        self._validate({field: [value]})
         patient_id = self.resolve_patient(reference)["patient_id"]
         with self.connect() as db:
-            # Verrou avant lecture pour ne pas perdre une note ajoutée simultanément.
+            # Verrou avant lecture pour ne pas perdre un ajout simultané.
             db.execute("BEGIN IMMEDIATE")
-            row = db.execute("SELECT notes FROM patients WHERE patient_id = ?", (patient_id,)).fetchone()
+            # Le nom de colonne provient exclusivement de LIST_FIELDS, vérifié ci-dessus.
+            row = db.execute(f"SELECT {field} FROM patients WHERE patient_id = ?", (patient_id,)).fetchone()
             if row is None:
                 raise PatientNotFoundError(patient_id)
-            notes = json.loads(row["notes"])
-            notes.append(note.strip())
-            db.execute("UPDATE patients SET notes = ? WHERE patient_id = ?",
-                       (json.dumps(notes, ensure_ascii=False), patient_id))
+            items = edit(json.loads(row[field]))
+            db.execute(f"UPDATE patients SET {field} = ? WHERE patient_id = ?",
+                       (json.dumps(items, ensure_ascii=False), patient_id))
         return self.get_patient(patient_id)
 
     def delete_patient(self, patient_id: str) -> None:

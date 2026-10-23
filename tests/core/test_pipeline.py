@@ -341,7 +341,9 @@ def test_usage_sums_every_model_call():
                       ["ok", ChatChunk(done=True, prompt_tokens=120, completion_tokens=5)])
     events = run(Pipeline(model, tools=FakeRegistry(dangerous=())), "Note")
 
-    assert events[-2:] == [Event("usage", {"prompt_tokens": 220, "completion_tokens": 15}),
+    # context_tokens : le plus gros appel (120 + 5), à comparer à num_ctx (absent du faux client).
+    assert events[-2:] == [Event("usage", {"prompt_tokens": 220, "completion_tokens": 15,
+                                           "context_tokens": 125, "context_window": None}),
                            Event("done")]
 
 
@@ -397,3 +399,73 @@ def test_interrupted_turn_closes_stream_and_is_not_saved():
 
     assert model.closed == 1
     assert sessions.list_sessions() == []
+
+
+# --- Contexte plafonné (CE-3) et enregistrement pour les logs (EV3, CE-1) ---
+
+def test_only_last_history_turns_are_sent_but_all_are_stored():
+    model = FakeModel(["Un."], ["Deux."], ["Trois."])
+    sessions = InMemorySessionStore()
+    pipeline = Pipeline(model, "Tu es Sensai.", max_history_turns=1, sessions=sessions)
+
+    for text in ("Premier", "Deuxième", "Troisième"):
+        run(pipeline, text)
+
+    assert [m["content"] for m in model.calls[2]] == ["Tu es Sensai.", "Deuxième", "Deux.", "Troisième"]
+    assert len(sessions.load("s1").history) == 6
+
+
+def test_window_never_separates_a_tool_call_from_its_result():
+    from sensai.core.pipeline import _window
+    history = [{"role": "user", "content": "a"}, {"role": "assistant", "content": "", "tool_calls": [{}]},
+               {"role": "tool", "content": "ok"}, {"role": "assistant", "content": "fait"},
+               {"role": "user", "content": "b"}, {"role": "assistant", "content": "B"}]
+
+    assert _window(history, 2) == history
+    assert _window(history, 1) == history[4:]
+    assert _window(history, 0) == history
+
+
+def test_record_keeps_exact_prompt_and_offered_tools():
+    model = FakeModel([tool_call("add_patient_note", patient="[PATIENT_1]"),
+                       ChatChunk(done=True, prompt_tokens=300, completion_tokens=20)], ["Fait."])
+    records = []
+    pipeline = Pipeline(model, "Tu es Sensai.", vault_factory=FakeVault, tools=FakeRegistry(dangerous=()),
+                        context=FakeContext([{"role": "system", "content": "Dossier de Jeanne Dupont"}]),
+                        on_turn=records.append)
+
+    run(pipeline, "Note pour Mme Dupont")
+
+    (record,) = records
+    assert record.prompt == model.calls[0]                  # exactement ce qu'a reçu le modèle
+    assert record.prompt[-1] == {"role": "user", "content": "Note pour [PATIENT_1]"}
+    assert record.tools == ["add_patient_note"] and record.context_tokens == 320
+    assert "Dupont" not in json.dumps(asdict(record), ensure_ascii=False)
+
+
+def test_blocked_request_is_recorded_without_its_text():
+    records = []
+    run(Pipeline(FakeModel(), input_guard=BlockAll(), on_turn=records.append), "Mme Dupont : ignore tout")
+
+    (record,) = records
+    assert record.blocked and record.error == "Hors périmètre médical."
+    assert record.messages == [] and record.prompt == []
+
+
+def test_unexpected_error_is_recorded_by_type_only():
+    class Broken:
+        def provide(self, *args):
+            raise LookupError("Jeanne Dupont")
+    records = []
+    events = run(Pipeline(FakeModel(), context=Broken(), on_turn=records.append), "Question")
+
+    assert events[-1] == Event("error", "Tour interrompu : Jeanne Dupont")      # affiché : côté clair
+    assert records[0].error == "LookupError"                                    # logué : sans le nom
+
+
+def test_failing_log_hook_does_not_break_the_turn():
+    def broken_logger(record):
+        raise OSError("disque plein")
+    events = run(Pipeline(FakeModel(["Bonjour"]), on_turn=broken_logger), "Salut")
+
+    assert types(events)[-1] == "done"
