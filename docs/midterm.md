@@ -1,5 +1,9 @@
 # Parcours de démonstration midterms
 
+Ce document conserve le scénario de la soutenance du 14 octobre 2026.
+Depuis le 21 octobre, les profils et le RAG sont disponibles : voir
+[le README](../README.md) et [le guide documentaire](rag.md) pour le parcours actuel.
+
 ## Préparation
 
 Depuis la racine du dépôt :
@@ -39,12 +43,12 @@ Ne pas lancer plusieurs générations ou benchmarks en parallèle sur ce portabl
    distincte d'une décision du modèle. Relire la note avec `/dossier`.
 7. Quitter avec `/quit`, relancer la même commande et poser
    `Quelle allergie venons-nous de consulter ?` : l'historique est rechargé.
-8. Expliquer les limites : le RAG et le profil médecin ne sont pas encore livrés ;
-   les seules sources de ce parcours sont les dossiers fictifs SQLite.
+8. Pour cette démonstration historique, les sources sont les dossiers fictifs SQLite.
 
 Éviter de présenter une réponse sur un médicament comme une recherche documentaire :
-aucune notice ANSM/HAS n'est ingérée actuellement. La lecture d'une allergie
-enregistrée suffit pour démontrer l'utilisation du dossier.
+ce parcours historique n'utilisait aucune notice ANSM/HAS. La lecture d'une
+allergie enregistrée démontre l'utilisation du dossier ; le guide RAG montre
+séparément la recherche dans les documents publics désormais disponible.
 
 ## Vérifier la persistance et la pseudonymisation
 

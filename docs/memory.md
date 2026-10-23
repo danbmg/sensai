@@ -1,13 +1,14 @@
-# Mémoire — livraison intermédiaire de Timothée
+# Mémoire — M1 et M3 de Timothée
 
-## État pour la mid-term
+## État actuel
 
 Disponible : API Python CRUD SQLite des patients, trois patients fictifs, stockage
-persistant des sessions conforme à `SessionStore`, démo autonome et tests du stockage.
+persistant des sessions conforme à `SessionStore`, profils médecins persistants,
+démo autonome et tests du stockage et de l'intégration CLI.
 
-À faire : profil médecin et injection au démarrage, RAG R1, puis bonus R2.
-L'intégration midterms branche maintenant les sessions SQLite, le contexte patient,
-les protections PII et les outils patients à la CLI. Voir `docs/midterm.md`.
+Les sessions, le profil sélectionné, le dossier patient et les documents publics
+RAG sont branchés à la CLI via les interfaces existantes. La partie documentaire
+R1 et le bonus R2 sont décrits dans [rag.md](rag.md).
 
 ## Démonstration
 
@@ -94,9 +95,44 @@ indépendantes : elles ne sont modifiées en base qu'après `save()`.
 
 La CLI permet de sélectionner/reprendre un identifiant avec `--session` ou `/session`,
 injecte ce stockage au pipeline et demande confirmation avant les écritures.
+La table supplémentaire `session_context` conserve le patient, l'identifiant du
+profil, les filtres documentaires et les derniers extraits utilisés, sans modifier
+le contrat `SessionState`. `load_context()` et `save_context()` sont utilisés par
+la CLI. La reprise recharge ces informations ; un patient supprimé produit une
+erreur explicite. Les anciennes sessions sans métadonnées nécessitent un choix
+explicite du patient. `/patient`, `/profile` et `/reset` ouvrent une nouvelle
+conversation ; les sources de la précédente restent enregistrées avec elle.
 Le vrai `PIIVault` est branché : le stockage sauvegarde le contrat reçu,
 il ne pseudonymise pas les messages lui-même. SQLite contient le coffre PII local
 en clair, conformément au contrat ; aucun chiffrement n'est implémenté.
+
+## Profil médecin
+
+`sensai/memory/profiles.py` fournit `DoctorProfile` et `DoctorProfileStore`.
+La table `doctor_profiles`, dans la base mémoire, conserve l'identifiant, la
+spécialité, une liste de préférences et les instructions personnalisées.
+`save()` crée ou remplace un profil ; `load()` le retrouve ; `list_profiles()`
+liste ses identifiants. Un identifiant inconnu lève `ProfileNotFoundError`.
+
+```bash
+python -m sensai.memory.profiles set generaliste --specialty "Médecine générale" --preference "Réponses courtes" --instructions "Citer les sources disponibles"
+python -m sensai.memory.profiles show generaliste
+python -m sensai.memory.profiles list
+python -m sensai --profile generaliste
+```
+
+Ajouter `--db <chemin>` avant `set`, `show` ou `list` pour une autre base.
+`set` remplace l'ensemble des champs : conserver explicitement ceux souhaités.
+Le lancement habituel crée uniquement un profil `default` vide s'il est absent.
+`PatientContext` prend une copie du profil à l'ouverture et le transmet au pipeline,
+qui masque le contexte avant l'appel au modèle. Une nouvelle conversation recharge
+le profil en base ; le dossier patient, lui, est relu à chaque tour.
+
+SQLite convient ici parce que les profils, patients et sessions sont locaux et
+ne nécessitent pas de serveur. Un fichier JSON serait simple pour un profil unique,
+mais moins pratique pour gérer plusieurs profils et des écritures atomiques avec
+les autres stockages. PostgreSQL apporterait un serveur à administrer sans besoin
+actuel de nombreux utilisateurs simultanés.
 
 ## Choix et limites
 
@@ -104,12 +140,13 @@ SQLite vient de la bibliothèque standard Python et conserve les données sans
 serveur. Les patients ont leurs propres colonnes ; les collections de textes et
 les messages Ollama sont sérialisés en JSON. Chaque opération ferme sa connexion.
 L'ajout d'une note prend un verrou avant lecture pour préserver les ajouts concurrents.
-Les deux stockages peuvent partager un fichier, avec des tables distinctes.
+Les stockages patients, sessions et profils partagent un fichier, avec des tables
+distinctes. L'index documentaire public utilise un autre fichier.
 
 Cette version ne propose pas de migrations de schéma, de comptes médecins,
-d'horodatage/auteur des notes ou d'audit des modifications. Le profil médecin
-reste à implémenter dans la partie de Timothée. `PatientContext` fournit le dossier
-sélectionné via `ContextProvider` ; la partie documentaire RAG reste à développer.
+d'horodatage/auteur des notes ou d'audit des modifications. Les profils ne sont pas
+des comptes authentifiés : ils configurent les réponses, sans gérer les accès.
+`PatientContext` fournit profil, dossier et extraits via `ContextProvider`.
 
 ## Vérification
 
