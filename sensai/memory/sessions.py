@@ -15,6 +15,22 @@ class SQLiteSessionStore(SQLiteDatabase):
                 history TEXT NOT NULL,
                 pii_map TEXT NOT NULL
             )""")
+            db.execute("""CREATE TABLE IF NOT EXISTS session_context (
+                session_id TEXT PRIMARY KEY, payload TEXT NOT NULL)""")
+
+    def load_context(self, session_id: str) -> dict:
+        """Métadonnées CLI, séparées du contrat SessionState du pipeline."""
+        with self.connect() as db:
+            row = db.execute("SELECT payload FROM session_context WHERE session_id=?", (session_id,)).fetchone()
+        return json.loads(row[0]) if row else {}
+
+    def save_context(self, session_id: str, metadata: dict) -> None:
+        if not isinstance(session_id, str) or not session_id.strip():
+            raise ValueError("session_id doit être un texte non vide.")
+        with self.connect() as db:
+            db.execute("""INSERT INTO session_context VALUES (?, ?)
+                ON CONFLICT(session_id) DO UPDATE SET payload=excluded.payload""",
+                       (session_id, json.dumps(metadata, ensure_ascii=False)))
 
     def load(self, session_id: str) -> SessionState:
         with self.connect() as db:
