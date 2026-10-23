@@ -9,6 +9,9 @@ num_batch = 64
 
 [assistant]
 max_tool_iterations = 2
+# Tours d'historique envoyés au modèle (0 = tous) : avec num_ctx = 2048, le dossier, les
+# extraits RAG et les outils prennent déjà environ la moitié du contexte.
+max_history_turns = 4
 system_prompt = """
 Tu es Sensai, l'assistant d'un cabinet médical. Tu tournes entièrement en local.
 Réponds en français, de façon brève et factuelle.
@@ -32,3 +35,8 @@ rerank = true
 max_context_chars = 2600
 batch_size = 4
 timeout = 180
+
+[logging]
+# Logs EV3 : une ligne JSON pseudonymisée par tour dans logs/AAAA-MM-JJ.jsonl.
+enabled = true
+directory = "logs"
