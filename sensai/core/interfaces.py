@@ -1,7 +1,7 @@
-"""Contrat partagé Sensai — PROPOSITION v2, à valider à 3 (Dan, Timothée, Matteo).
+"""Contrat partagé Sensai — v2, validé à 3 le 2026-10-05 (Dan, Timothée, Matteo).
 
-Ne pas coder contre la v1 : cette version remplace GuardResult.mapping par un
-PIIVault par session et précise ce qui est en clair et ce qui est pseudonymisé.
+Par rapport à la v1 : un PIIVault par session remplace GuardResult.mapping, et le
+contrat précise ce qui est en clair et ce qui est pseudonymisé.
 
 Frontière PII : le pipeline (Dan) est le SEUL endroit qui pseudonymise et ré-identifie.
 - Côté clair (local)   : ContextProvider (recherche patient), ToolRegistry.call(),
@@ -83,7 +83,7 @@ class ToolRegistry(Protocol):                   # Matteo (T1) — arguments et r
 @dataclass
 class Event:                                    # émis par le pipeline, lu par CLI et web
     type: Literal["token", "tool_call", "tool_result", "confirm",
-                  "usage", "error", "done"]
+                  "usage", "sources", "error", "done"]  # sources : ajouté par sensai.app
     data: Any = None                            # EN CLAIR : ne jamais logger à partir des Event
 
 

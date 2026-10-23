@@ -15,13 +15,18 @@ Event émis (data EN CLAIR) :
     tool_call    {"id", "tool", "args"}
     confirm      {"id", "tool", "args"} : outil dangereux, juste avant l'appel à confirm()
     tool_result  {"id", "tool", "content", "is_error"}
-    usage        {"prompt_tokens", "completion_tokens"} : cumul du tour
+    usage        {"prompt_tokens", "completion_tokens"} : cumul du tour ;
+                 {"context_tokens", "context_window"} : le plus gros appel du tour face à num_ctx
     error        str : message à afficher. Sans « done » derrière, le tour est abandonné.
     done         None : le tour est enregistré dans la session
+
+Contexte plafonné : seuls les `max_history_turns` derniers tours partent au modèle
+(0 = tout l'historique) ; l'historique complet reste stocké dans la session.
 """
+import copy
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Generator, Iterator
 
 from sensai.core.defaults import (EmptyContext, EmptyRegistry, InMemorySessionStore, NullGuard,
@@ -44,12 +49,17 @@ class TurnRecord:               # passé au hook on_turn (logs EV3) : PSEUDONYMI
     latency_s: float
     prompt_tokens: int
     completion_tokens: int
-    error: str = ""             # tour abandonné sur une erreur d'Ollama
+    error: str = ""             # tour abandonné (erreur d'Ollama, ou type de l'exception)
+    prompt: list[Message] = field(default_factory=list)  # 1er appel, exactement tel qu'envoyé
+    tools: list[str] = field(default_factory=list)       # outils proposés au modèle
+    context_tokens: int = 0     # le plus gros appel du tour (prompt + réponse)
+    blocked: bool = False       # requête refusée par l'InputGuard, avant le modèle
 
 
 class Pipeline:
     def __init__(self, client: OllamaClient, system_prompt: str = "",
                  max_tool_iterations: int = 5, *,
+                 max_history_turns: int = 0,
                  input_guard: InputGuard | None = None,
                  output_guard: OutputGuard | None = None,
                  vault_factory: VaultFactory | None = None,
@@ -61,6 +71,7 @@ class Pipeline:
         self.client = client
         self.system = [{"role": "system", "content": system_prompt}] if system_prompt else []
         self.max_tool_iterations = max_tool_iterations
+        self.max_history_turns = max_history_turns
         self.input_guard = input_guard or NullGuard()
         self.output_guard = output_guard or NullOutputGuard()
         self.vault_factory = vault_factory or NullVault
@@ -72,18 +83,22 @@ class Pipeline:
     def run(self, user_text: str, session_id: str, confirm: ConfirmFn, *,
             tool_names: set[str] | None = None) -> Iterator[Event]:
         """Un tour complet. `user_text` arrive en clair ; les Event repartent en clair."""
+        start = time.perf_counter()
         try:
-            yield from self._run(user_text, session_id, confirm, tool_names)
+            yield from self._run(user_text, session_id, confirm, tool_names, start)
         except Exception as error:
             # Une erreur de stockage/contexte/outil mal formé ne ferme pas la CLI.
+            # Le log ne garde que le type : le message peut contenir un nom en clair.
+            self._record(session_id, [], start, _empty_usage(), type(error).__name__)
             yield Event("error", f"Tour interrompu : {error}")
 
     def _run(self, user_text: str, session_id: str, confirm: ConfirmFn,
-             tool_names: set[str] | None) -> Iterator[Event]:
+             tool_names: set[str] | None, start: float) -> Iterator[Event]:
         """Déroulé du tour : guard, contexte, modèle, outils, puis sauvegarde de la session."""
-        start = time.perf_counter()
         guard = self.input_guard.check(user_text)
         if guard.blocked:
+            # Logué sans le texte : il est encore en clair à ce stade.
+            self._record(session_id, [], start, _empty_usage(), guard.reason, blocked=True)
             yield Event("error", guard.reason)
             return
 
@@ -92,13 +107,19 @@ class Pipeline:
         masked = vault.mask(user_text)
         context = [{**m, "content": vault.mask(m["content"])}
                    for m in self.context.provide(user_text, masked, session_id)]
+        history = _window(state.history, self.max_history_turns)
         turn: list[Message] = [{"role": "user", "content": masked}]  # pseudonymisé
-        usage = {"prompt_tokens": 0, "completion_tokens": 0}
+        usage = _empty_usage()
+        schemas = self.tools.schemas()
+        if tool_names is not None:
+            schemas = [schema for schema in schemas if schema["function"]["name"] in tool_names]
+        prompt = copy.deepcopy(self.system + context + history + turn)
+        offered = [schema["function"]["name"] for schema in schemas]
 
         try:
             for iteration in range(self.max_tool_iterations + 1):
-                reply = yield from self._ask(self.system + context + state.history + turn,
-                                             vault, usage, tool_names)
+                reply = yield from self._ask(self.system + context + history + turn,
+                                             vault, usage, schemas)
                 turn.append(reply)
                 if "tool_calls" not in reply:
                     break
@@ -122,25 +143,27 @@ class Pipeline:
                     break
         except OLLAMA_ERRORS as e:
             message = describe_error(e, self.client)
-            self._record(session_id, turn[:1], start, usage, message)
+            self._record(session_id, turn[:1], start, usage, message, prompt=prompt, tools=offered)
             yield Event("error", message)
             return
 
         state.history += turn
         state.pii_map = vault.export()
         self.sessions.save(session_id, state)
-        self._record(session_id, turn, start, usage)
-        yield Event("usage", dict(usage))
+        self._record(session_id, turn, start, usage, prompt=prompt, tools=offered)
+        yield Event("usage", {**usage, "context_window": self.client_options().get("num_ctx")})
         yield Event("done")
 
-    def _ask(self, messages: list[Message], vault: PIIVault,
-             usage: dict[str, int], tool_names: set[str] | None = None) -> Generator[Event, None, Message]:
+    def client_options(self) -> dict[str, Any]:
+        """Options envoyées à Ollama (num_ctx…) ; un faux client de test peut ne pas en avoir."""
+        return getattr(self.client, "options", None) or {}
+
+    def _ask(self, messages: list[Message], vault: PIIVault, usage: dict[str, int],
+             schemas: list[dict]) -> Generator[Event, None, Message]:
         """Un appel au modèle : émet les fragments en clair, renvoie la réponse pseudonymisée."""
         display = _DisplayBuffer(vault.reveal)
         content, tool_calls = "", []
-        schemas = self.tools.schemas()
-        if tool_names is not None:
-            schemas = [schema for schema in schemas if schema["function"]["name"] in tool_names]
+        call_tokens = 0
         stream = self.client.chat_stream(messages, schemas or None)
         try:
             for chunk in stream:
@@ -150,8 +173,10 @@ class Pipeline:
                 tool_calls += chunk.tool_calls
                 usage["prompt_tokens"] += chunk.prompt_tokens
                 usage["completion_tokens"] += chunk.completion_tokens
+                call_tokens += chunk.prompt_tokens + chunk.completion_tokens
         finally:
             stream.close()      # interruption (Ctrl+C, client web parti) : Ollama arrête de générer
+            usage["context_tokens"] = max(usage["context_tokens"], call_tokens)
         if text := display.flush():
             yield Event("token", text)
 
@@ -198,12 +223,35 @@ class Pipeline:
             return ToolResult(f"Erreur de l'outil {name} : {e}", is_error=True)
 
     def _record(self, session_id: str, messages: list[Message], start: float,
-                usage: dict[str, int], error: str = "") -> None:
+                usage: dict[str, int], error: str = "", *, prompt: list[Message] | None = None,
+                tools: list[str] | None = None, blocked: bool = False) -> None:
         """Transmet le tour pseudonymisé au hook on_turn (logs EV3), s'il est branché."""
-        if self.on_turn:
-            self.on_turn(TurnRecord(session_id, self.client.model, messages,
-                                    time.perf_counter() - start, usage["prompt_tokens"],
-                                    usage["completion_tokens"], error))
+        if not self.on_turn:
+            return
+        record = TurnRecord(session_id, self.client.model, messages, time.perf_counter() - start,
+                            usage["prompt_tokens"], usage["completion_tokens"], error,
+                            prompt or [], tools or [], usage["context_tokens"], blocked)
+        try:
+            self.on_turn(record)
+        except Exception:
+            pass    # un log en échec (disque plein…) ne doit pas faire échouer la consultation
+
+
+def _empty_usage() -> dict[str, int]:
+    """Compteurs d'un tour : cumul des appels, et le plus gros appel (occupation du contexte)."""
+    return {"prompt_tokens": 0, "completion_tokens": 0, "context_tokens": 0}
+
+
+def _window(history: list[Message], turns: int) -> list[Message]:
+    """Les `turns` derniers tours de l'historique (0 = tout).
+
+    Un tour commence par un message « user » : on ne coupe donc jamais entre un appel
+    d'outil et son résultat.
+    """
+    if turns <= 0:
+        return history
+    starts = [index for index, message in enumerate(history) if message.get("role") == "user"]
+    return history[starts[-turns]:] if len(starts) > turns else history
 
 
 class _DisplayBuffer:
