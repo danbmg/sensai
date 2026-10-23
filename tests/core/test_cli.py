@@ -5,6 +5,8 @@ import requests
 
 from sensai import cli
 from sensai.core.ollama_client import ChatChunk, ModelNotFoundError, OllamaError
+from sensai.memory.profiles import DoctorProfile, DoctorProfileStore
+from sensai.memory.sessions import SQLiteSessionStore
 
 TOOLS = ["completion", "tools"]
 
@@ -16,6 +18,7 @@ class FakeClient:
 
     def __init__(self, model, host, options=None, **kwargs):
         FakeClient.model, FakeClient.host, FakeClient.options = model, host, options
+        FakeClient.keep_alive = kwargs.get("keep_alive")
         self.model, self.host, self.timeout = model, host, 120.0
 
     def capabilities(self):
@@ -93,6 +96,16 @@ def test_model_flag_overrides_config(run_cli):
     assert FakeClient.model == "qwen2.5:3b"
 
 
+def test_model_retention_is_opt_in(run_cli):
+    run_cli([])
+    assert FakeClient.keep_alive == 0
+    run_cli([], argv=["--keep-alive", "2m"])
+    assert FakeClient.keep_alive == "2m"
+    with pytest.raises(SystemExit) as error:
+        run_cli([], argv=["--keep-alive", "forever"])
+    assert error.value.code == 2
+
+
 def test_banner_shows_model_and_commands(monkeypatch, capsys, config_file):
     monkeypatch.setattr(cli, "OllamaClient", FakeClient)
     monkeypatch.setattr(FakeClient, "capabilities_result", TOOLS)
@@ -146,6 +159,85 @@ def test_reset_clears_history_but_keeps_system_prompt(run_cli):
 
     assert FakeClient.calls[1] == [SYSTEM, {"role": "user", "content": "Comment je m'appelle ?"}]
     assert "Conversation effacée." in out
+
+
+def test_restart_restores_patient_and_profile_and_rejects_mixed_patient(run_cli, config_file):
+    db = config_file.parent / "test.sqlite3"
+    profiles = DoctorProfileStore(db)
+    profiles.save(DoctorProfile("generaliste", "Médecine générale", ["Réponses courtes"], "Citer les sources"))
+    run_cli(["Quelles allergies sont enregistrées ?"], [reply("Dossier consulté.")],
+            argv=["--demo", "--profile", "generaliste", "--session", "consultation"])
+    run_cli(["/dossier", "/profile", "Quelles allergies sont enregistrées ?"], [reply("Dossier consulté.")],
+            argv=["--session", "consultation"])
+    context = "\n".join(m["content"] for m in FakeClient.calls[0] if m["role"] == "system")
+    assert "Médecine générale" in context and "pénicilline" in context.casefold()
+    assert "Jeanne Dupont" not in context  # le modèle reçoit le dossier masqué
+    assert len(SQLiteSessionStore(db).load("consultation").history) == 4
+    with pytest.raises(SystemExit, match="autre patient"):
+        run_cli([], argv=["--session", "consultation", "--patient", "demo-bernard"])
+
+
+def test_session_switch_restores_associated_patient(run_cli):
+    out = run_cli(["/patient demo-bernard", "/session dupont", "/dossier"],
+                  argv=["--demo", "--session", "dupont"]).out
+    assert '"name": "Jeanne Dupont"' in out
+
+
+def test_reset_reloads_modified_profile_at_next_conversation(run_cli, config_file):
+    profiles = DoctorProfileStore(config_file.parent / "test.sqlite3")
+    profiles.save(DoctorProfile("default", "Médecine générale"))
+    def change_profile():
+        yield "Premier échange"
+        profiles.save(DoctorProfile("default", "Cardiologie"))
+        yield "/reset"
+        yield "Deuxième échange"
+    run_cli(change_profile(), [reply("Bonjour."), reply("Bonjour.")])
+    first = " ".join(m["content"] for m in FakeClient.calls[0])
+    second = " ".join(m["content"] for m in FakeClient.calls[1])
+    assert "Médecine générale" in first and "Cardiologie" not in first
+    assert "Cardiologie" in second and "Médecine générale" not in second
+
+
+def test_document_commands_and_source_persistence(run_cli, monkeypatch, config_file):
+    from sensai.rag.documents import PublicDocument, chunk_pages
+    from sensai.rag.store import VectorStore
+    path = config_file.parent / "public.txt"
+    path.write_text("Allergie à la pénicilline : extrait public de test.")
+    document = PublicDocument(path, "Notice de test", "https://ansm.sante.fr/test", "ANSM", public=True)
+    store = VectorStore(config_file.parent / "rag.sqlite3")
+    chunks = chunk_pages(document.document_id, [(1, path.read_text())])
+    store.replace_document(document, chunks, [[1, 0]], "nomic-embed-text", "test")
+    queries = []
+    class FakeEmbeddings:
+        model = "nomic-embed-text"
+        def __init__(self, *args): pass
+        def embed_query(self, text):
+            queries.append(text)
+            return [1, 0]
+    monkeypatch.setattr(cli, "OllamaEmbeddings", FakeEmbeddings)
+    run_cli(["/search Allergie de Jeanne Dupont à la pénicilline", "/sources"],
+            argv=["--demo", "--session", "sources"])
+    assert queries and "Jeanne Dupont" not in queries[0]
+    resumed = run_cli(["/sources"], argv=["--session", "sources"]).out
+    assert '"citation": "S1"' in resumed and "https://ansm.sante.fr/test" in resumed
+    filtered = run_cli(['/rag-filter {"publisher":"HAS"}', "/search allergie", "/sources"],
+                       argv=["--session", "sources"]).out
+    assert "Aucun extrait documentaire pertinent" in filtered
+    assert len(queries) == 1  # aucun document HAS : aucun appel embeddings
+
+
+def test_failed_turn_keeps_previous_sources(run_cli, monkeypatch, config_file):
+    from sensai.rag.retrieval import Hit
+    from dataclasses import asdict
+    db = config_file.parent / "test.sqlite3"
+    DoctorProfileStore(db).ensure_default()
+    sessions = SQLiteSessionStore(db)
+    hit = Hit("a:0", "a", "Source précédente", "https://ansm.sante.fr/a", "ANSM", "", 1, "Texte public", .8, .7, 1)
+    sessions.save_context("interruption", {"patient_id": None, "profile_id": "default", "sources": [asdict(hit)]})
+    out = run_cli(["Question", "/sources"], [[requests.ConnectionError("refused")]],
+                  argv=["--session", "interruption"])
+    assert "Source précédente" in out.out
+    assert sessions.load_context("interruption")["sources"][0]["document_id"] == "a"
 
 
 def test_quit_stops_without_calling_model(run_cli):

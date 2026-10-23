@@ -16,3 +16,19 @@ Appuie-toi uniquement sur le dossier patient et les notices fournis dans le cont
 Si l'information manque, dis-le au lieu de l'inventer.
 Tu ne modifies jamais un dossier sans la validation explicite du médecin.
 """
+
+[rag]
+enabled = true
+search_mode = "auto" # lectures explicites du dossier seul : pas de recherche documentaire
+model = "nomic-embed-text"
+# Index rag.sqlite3 à côté de la base patients ; jamais dans les tables patients.
+chunk_size = 900
+overlap = 120
+top_k = 3
+candidates = 20
+min_similarity = 0.7
+min_relevance = 0.5
+rerank = true
+max_context_chars = 2600
+batch_size = 4
+timeout = 180
