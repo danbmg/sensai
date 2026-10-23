@@ -4,6 +4,7 @@ import pytest
 import requests
 
 from sensai import cli
+from sensai.app import runtime as app_runtime
 from sensai.core.ollama_client import ChatChunk, ModelNotFoundError, OllamaError
 from sensai.memory.profiles import DoctorProfile, DoctorProfileStore
 from sensai.memory.sessions import SQLiteSessionStore
@@ -52,7 +53,7 @@ def run_cli(monkeypatch, capsys, config_file):
 
     Une exception dans `inputs` est levée par input() (ex. KeyboardInterrupt = Ctrl+C).
     """
-    monkeypatch.setattr(cli, "OllamaClient", FakeClient)
+    monkeypatch.setattr(app_runtime, "OllamaClient", FakeClient)
 
     def run(inputs, replies=(), argv=(), capabilities=TOOLS):
         FakeClient.capabilities_result = capabilities
@@ -107,7 +108,7 @@ def test_model_retention_is_opt_in(run_cli):
 
 
 def test_banner_shows_model_and_commands(monkeypatch, capsys, config_file):
-    monkeypatch.setattr(cli, "OllamaClient", FakeClient)
+    monkeypatch.setattr(app_runtime, "OllamaClient", FakeClient)
     monkeypatch.setattr(FakeClient, "capabilities_result", TOOLS)
     monkeypatch.setattr("builtins.input", lambda prompt="": "/quit")
     cli.main(["--config", str(config_file)])
@@ -214,7 +215,7 @@ def test_document_commands_and_source_persistence(run_cli, monkeypatch, config_f
         def embed_query(self, text):
             queries.append(text)
             return [1, 0]
-    monkeypatch.setattr(cli, "OllamaEmbeddings", FakeEmbeddings)
+    monkeypatch.setattr(app_runtime, "OllamaEmbeddings", FakeEmbeddings)
     run_cli(["/search Allergie de Jeanne Dupont à la pénicilline", "/sources"],
             argv=["--demo", "--session", "sources"])
     assert queries and "Jeanne Dupont" not in queries[0]
@@ -352,3 +353,44 @@ def test_error_during_generation_reported_and_session_kept(run_cli, error, messa
 def test_missing_config_exits_with_message(tmp_path):
     with pytest.raises(SystemExit, match="Configuration invalide.*introuvable"):
         cli.main(["--config", str(tmp_path / "absent.toml")])
+
+
+# --- Contexte et logs visibles depuis la CLI (CE-1, CE-3, EV3) ---
+
+def test_usage_line_after_answer(run_cli):
+    out = run_cli(["Salut"], [[ChatChunk(content="Bonjour"),
+                               ChatChunk(done=True, prompt_tokens=812, completion_tokens=54)]]).out
+
+    assert "tokens : 812 lus + 54 générés · contexte 866/2048" in out
+
+
+def test_prompt_command_shows_exact_pseudonymized_prompt(run_cli):
+    out = run_cli(["/prompt", "Mme Dupont va-t-elle bien ?", "/prompt"], [reply("Oui.")], argv=["--demo"]).out
+
+    assert "Aucun prompt envoyé" in out
+    prompt = out.split("(pseudonymisé) :", 1)[1]
+    assert '"content": "[PATIENT_1] va-t-elle bien ?"' in prompt and "Dupont" not in prompt
+    assert "Outils proposés : aucun" in prompt
+
+
+def test_metrics_command(run_cli, config_file):
+    assert "Logs désactivés" in run_cli(["/metrics"]).out
+    logs = config_file.parent / "logs"
+    config_file.write_text(config_file.read_text() + f'[logging]\nenabled = true\ndirectory = "{logs}"\n')
+
+    out = run_cli(["Salut", "/metrics"], [reply("Bonjour")]).out
+
+    assert "Tours : 1" in out and len(list(logs.glob("*.jsonl"))) == 1
+
+
+def test_commands_needing_a_value_explain_their_usage(run_cli):
+    err = run_cli(["/patient", "/note"], argv=["--demo"]).err
+
+    assert "usage : /patient <nom complet ou id>" in err and "usage : /note <texte>" in err
+
+
+def test_tools_command_marks_actions_needing_approval(run_cli):
+    out = run_cli(["/tools"]).out
+
+    assert "add_patient_entry : " in out and "(validation du médecin)" in out
+    assert "find_patients : Cherche" in out and "find_patients : Cherche les patients dont le nom contient le texte donné (nom et identifiant).\n" in out

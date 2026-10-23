@@ -4,6 +4,8 @@ import copy
 import pytest
 
 from sensai import cli
+from sensai.app import runtime as app_runtime
+from sensai.app.tool_routing import requested_tools
 from sensai.core.interfaces import PSEUDONYM_RE, SessionState
 from sensai.core.ollama_client import ChatChunk, OllamaClient, OllamaError
 from sensai.core.pipeline import Pipeline, _DisplayBuffer
@@ -134,6 +136,7 @@ def test_note_schema_is_rejected(stores):
 
 
 def test_resume_cli_session_and_manual_note(stores, monkeypatch, capsys):
+    monkeypatch.chdir(stores[0].path.parent)    # le config.toml du projet écrit ses logs ici, hors du dépôt
     patients, sessions = stores
     sessions.save("reprise", SessionState(history=[{"role": "user", "content": "Premier tour"}]))
     calls = []
@@ -144,7 +147,7 @@ def test_resume_cli_session_and_manual_note(stores, monkeypatch, capsys):
         def chat_stream(self, messages, tools=None):
             calls.append(messages)
             yield ChatChunk(content="Allergie à la pénicilline.", done=True)
-    monkeypatch.setattr(cli, "OllamaClient", Client)
+    monkeypatch.setattr(app_runtime, "OllamaClient", Client)
     lines = iter(["Quelles allergies ?", "/note Note manuelle fictive", "o", "/dossier", "/quit"])
     monkeypatch.setattr("builtins.input", lambda prompt="": next(lines))
     cli.main(["--db", str(patients.path), "--session", "reprise", "--patient", "demo-dupont"])
@@ -174,9 +177,9 @@ def test_reading_context_does_not_request_unnecessary_tools(stores):
     with medical_tools(patients) as registry:
         pipeline = Pipeline(Model(), context=context, sessions=sessions, tools=registry)
         events = list(pipeline.run("Quelles allergies ?", "s", lambda *args: False,
-                                   tool_names=cli._requested_tools("Quelles allergies ?")))
+                                   tool_names=requested_tools("Quelles allergies ?")))
     assert captured == [None] and events[-1].type == "done"
-    assert cli._requested_tools("Ajoute une note au dossier") == {"add_patient_note"}
+    assert requested_tools("Ajoute une note au dossier") == {"add_patient_note"}
 
 
 def test_invalid_or_incomplete_ollama_stream_is_reported(monkeypatch):

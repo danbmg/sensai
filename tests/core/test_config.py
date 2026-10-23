@@ -82,3 +82,22 @@ def test_project_config_is_valid_and_avoids_thinking_tag():
 def test_invalid_configuration_reports_config_error(write_config, text):
     with pytest.raises(ConfigError):
         load_config(write_config(text))
+
+
+def test_history_window_read_and_validated(tmp_path):
+    from sensai.core.config import ConfigError, load_config
+    path = tmp_path / "config.toml"
+    path.write_text('[model]\nname = "m"\n[assistant]\nmax_history_turns = 4\n', encoding="utf-8")
+    assert load_config(path).max_history_turns == 4
+    path.write_text('[model]\nname = "m"\n[assistant]\nmax_history_turns = -1\n', encoding="utf-8")
+    with pytest.raises(ConfigError, match="max_history_turns"):
+        load_config(path)
+
+
+def test_validate_config_rejects_live_changes():
+    from dataclasses import replace
+    from sensai.core.config import Config, ConfigError, validate_config
+    validate_config(Config("m"))
+    for change in ({"temperature": -0.1}, {"num_ctx": 0}, {"model": " "}, {"max_tool_iterations": True}):
+        with pytest.raises(ConfigError):
+            validate_config(replace(Config("m"), **change))

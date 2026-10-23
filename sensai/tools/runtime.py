@@ -3,7 +3,7 @@ from contextlib import contextmanager
 import sys
 
 from sensai.tools.basic_tools import register_basic_tools
-from sensai.tools.patient_tools import register_patient_tools
+from sensai.tools.patient_tools import DANGEROUS_TOOLS, register_patient_tools
 from sensai.tools.registry import AsyncRunner, ToolRegistry
 
 
@@ -28,7 +28,7 @@ def medical_tools(patients, use_mcp: bool = False):
     try:
         async def connect():
             await client.connect()
-            await register_mcp_tools(client, registry, dangerous={"add_patient_note"})
+            await register_mcp_tools(client, registry, dangerous=DANGEROUS_TOOLS)
         runner.run(connect(), timeout=15)
         yield registry
     finally:
