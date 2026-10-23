@@ -1,0 +1,24 @@
+{
+  "description": "Petit corpus public de démonstration ; les dates connues sont affichées, aucune garantie d'exhaustivité clinique.",
+  "documents": [
+    {
+      "file": "amoxicilline-sandoz-notice.html",
+      "title": "AMOXICILLINE SANDOZ 500 mg — notice patient (BDPM/ANSM)",
+      "source": "https://base-donnees-publique.medicaments.gouv.fr/medicament/67410088/extrait",
+      "publisher": "ANSM",
+      "date": "2026-09-29",
+      "tags": ["amoxicilline", "penicilline", "allergie", "notice"],
+      "public": true,
+      "section_id": "tabpanel-notice-panel"
+    },
+    {
+      "file": "has-antibiotiques-premier-recours-2014.pdf",
+      "title": "Principes généraux de prescription des antibiotiques en premier recours — HAS, février 2014",
+      "source": "https://www.has-sante.fr/upload/docs/application/pdf/2014-02/fiche_memo_conseils_prescription_antibiotiques.pdf",
+      "publisher": "HAS",
+      "date": "",
+      "tags": ["antibiotiques", "prescription", "premier-recours"],
+      "public": true
+    }
+  ]
+}

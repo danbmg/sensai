@@ -2,6 +2,7 @@ requests
 fastapi
 uvicorn
 numpy
+pypdf>=6,<7
 pytest>=7
 httpx
 mcp>=2.3,<3
