@@ -4,6 +4,7 @@ import sys
 import uuid
 import json
 import re
+from dataclasses import asdict
 from pathlib import Path
 from typing import Iterator
 
@@ -18,10 +19,23 @@ from sensai.memory.context import PatientContext
 from sensai.memory.fixtures import seed_demo_patients
 from sensai.memory.patients import PatientStore
 from sensai.memory.sessions import SQLiteSessionStore
+from sensai.memory.profiles import DoctorProfileStore
+from sensai.rag.embeddings import OllamaEmbeddings
+from sensai.rag.retrieval import Hit, Retriever, format_context, source_records
+from sensai.rag.settings import load_settings, resolve_index_path
+from sensai.rag.store import Filters, VectorStore
 from sensai.tools.runtime import medical_tools
 
 DIM, RESET = "\033[2m", "\033[0m"
 HELP = "/reset efface la conversation, /quit pour quitter, /help pour les commandes"
+
+
+def _keep_alive(value: str) -> int | str:
+    if value == "0":
+        return 0
+    if not re.fullmatch(r"[1-9]\d*(?:s|m|h)", value):
+        raise argparse.ArgumentTypeError("Durée attendue : 0, 30s, 2m ou 1h.")
+    return value
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -35,23 +49,59 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--demo", action="store_true", help="charger les patients fictifs")
     parser.add_argument("--patient", help="nom complet ou identifiant du patient à sélectionner")
     parser.add_argument("--mcp", action="store_true", help="utiliser le serveur MCP médical pour les outils patients")
+    parser.add_argument("--profile", help="profil médecin (défaut : profil de la session ou default)")
+    parser.add_argument("--list-profiles", action="store_true", help="lister les profils sans appeler Ollama")
+    parser.add_argument("--rag-index", type=Path, help="index documentaire séparé de la base patients")
+    parser.add_argument("--no-rag", action="store_true", help="désactiver la recherche documentaire pour cette exécution")
+    parser.add_argument("--keep-alive", type=_keep_alive, default=0,
+                        help="garder le modèle en RAM entre les appels (ex. 2m ; défaut 0 pour libérer la RAM)")
     args = parser.parse_args(argv)
 
     try:
         cfg = load_config(args.config, model=args.model)
+        rag = load_settings(args.config)
     except ConfigError as e:
         sys.exit(f"Configuration invalide : {e}")
 
     try:
         patients = PatientStore(args.db)
         sessions = SQLiteSessionStore(args.db)
+        profiles = DoctorProfileStore(args.db)
+        profiles.ensure_default()
         if args.demo:
             seed_demo_patients(patients)
         if args.list_sessions:
             print("\n".join(sessions.list_sessions()) or "Aucune session enregistrée.")
             return
-        context = PatientContext(patients)
-        if args.patient or args.demo:
+        if args.list_profiles:
+            print("\n".join(profiles.list_profiles()))
+            return
+        retriever = None
+        index_path = args.rag_index or resolve_index_path(rag, args.db)
+        if rag.enabled and not args.no_rag:
+            if index_path.resolve() == args.db.resolve():
+                raise ValueError("L'index RAG doit être séparé de la base patients.")
+            index = VectorStore(index_path)
+            if index.list_documents():
+                embedder = OllamaEmbeddings(rag.model, cfg.host, rag.timeout, rag.batch_size)
+                retriever = Retriever(index, embedder, top_k=rag.top_k, candidates=rag.candidates,
+                                      min_similarity=rag.min_similarity, min_relevance=rag.min_relevance,
+                                      rerank=rag.rerank)
+        saved = sessions.load_context(args.session) if args.session else {}
+        profile_id = args.profile or saved.get("profile_id") or "default"
+        if saved and args.profile and args.profile != saved.get("profile_id"):
+            raise ValueError("Cette session utilise un autre profil. Choisissez un nouvel identifiant de session.")
+        context = PatientContext(patients, profile=profiles.load(profile_id), retriever=retriever,
+                                 max_context_chars=rag.max_context_chars, profiles=profiles,
+                                 search_mode=rag.search_mode)
+        if saved:
+            _restore_context(context, saved)
+        if args.patient:
+            requested = patients.resolve_patient(args.patient)
+            if saved and requested["patient_id"] != saved.get("patient_id"):
+                raise ValueError("Cette session appartient à un autre patient. Choisissez une nouvelle session.")
+            context.select(args.patient)
+        elif args.demo and not saved:
             context.select(args.patient or "demo-dupont")
     except Exception as error:
         sys.exit(f"Stockage/contexte indisponible : {error}")
@@ -59,7 +109,7 @@ def main(argv: list[str] | None = None) -> None:
     client = OllamaClient(cfg.model, cfg.host, options={"temperature": cfg.temperature,
                          "num_ctx": cfg.num_ctx, "num_predict": cfg.num_predict,
                          "num_thread": cfg.num_thread, "num_batch": cfg.num_batch},
-                         timeout=cfg.timeout, keep_alive=0)
+                         timeout=cfg.timeout, keep_alive=args.keep_alive)
     _check_model(client)
     try:
         with medical_tools(patients, args.mcp) as registry:
@@ -79,6 +129,7 @@ def main(argv: list[str] | None = None) -> None:
 def _conversation(pipeline: Pipeline, context: PatientContext, session_id: str) -> None:
     """Boucle de saisie : exécute les commandes /… ou envoie la question au pipeline."""
     print(f"{DIM}Sensai · {pipeline.client.model} · session {session_id} — {HELP}{RESET}")
+    _save_context(pipeline, context, session_id)
     while True:
         try:
             text = input("> ").strip()
@@ -94,6 +145,8 @@ def _conversation(pipeline: Pipeline, context: PatientContext, session_id: str) 
             return
         if text == "/reset":        # nouvelle session : l'ancienne reste dans le SessionStore
             session_id = uuid.uuid4().hex
+            _refresh_context(context)
+            _save_context(pipeline, context, session_id)
             print(f"{DIM}Conversation effacée.{RESET}")
             continue
         if text.startswith("/"):
@@ -102,7 +155,38 @@ def _conversation(pipeline: Pipeline, context: PatientContext, session_id: str) 
                 value = value.strip()
                 if command == "/help":
                     print("/patients, /patient <nom complet ou id>, /dossier, /note <texte>, "
-                          "/sessions, /session <id>, /history, /tools, /reset, /quit")
+                          "/sessions, /session <id>, /history, /profile [id], /profiles, "
+                          "/rag, /search <question>, /sources, /rag-filter <JSON ou all>, /tools, /reset, /quit")
+                elif command == "/profiles":
+                    print("\n".join(context.profiles.list_profiles()))
+                elif command == "/profile":
+                    if value:
+                        context.profile = context.profiles.load(value)
+                        session_id = uuid.uuid4().hex
+                        _refresh_context(context)
+                        _save_context(pipeline, context, session_id)
+                    print(json.dumps(asdict(context.profile), ensure_ascii=False, indent=2))
+                elif command == "/rag":
+                    print("RAG actif" if context.retriever else "RAG inactif : aucun index chargé ou recherche désactivée.")
+                    print(f"Mode de recherche : {context.search_mode}")
+                    print(json.dumps(asdict(context.filters), ensure_ascii=False))
+                elif command == "/rag-filter":
+                    filters = Filters() if value == "all" else Filters(**json.loads(value))
+                    filters.validate()
+                    context.filters, context.last_hits = filters, []
+                    _save_context(pipeline, context, session_id)
+                    print("Filtres documentaires mis à jour.")
+                elif command == "/sources":
+                    print(json.dumps(source_records(context.last_hits), ensure_ascii=False, indent=2))
+                elif command == "/search" and value:
+                    if context.retriever is None:
+                        raise ValueError("Aucun index documentaire chargé. Utilisez python -m sensai.rag index.")
+                    state = pipeline.sessions.load(session_id)
+                    masked = pipeline.vault_factory(state.pii_map).mask(value)
+                    hits = context.retriever.search(masked, context.filters)
+                    text, context.last_hits = format_context(hits, context.max_context_chars)
+                    _save_context(pipeline, context, session_id)
+                    print(text)
                 elif command == "/patients":
                     for patient in context.patients.list_patients():
                         print(f"{patient['patient_id']} : {patient['name']}")
@@ -111,6 +195,8 @@ def _conversation(pipeline: Pipeline, context: PatientContext, session_id: str) 
                     patient = context.select(value)
                     if previous != context.patient_id:
                         session_id = uuid.uuid4().hex
+                        _refresh_context(context)
+                        _save_context(pipeline, context, session_id)
                     print(f"Patient sélectionné : {patient['name']} · session {session_id}")
                 elif command == "/dossier":
                     if context.patient_id is None:
@@ -130,7 +216,13 @@ def _conversation(pipeline: Pipeline, context: PatientContext, session_id: str) 
                 elif command == "/history":
                     print(json.dumps(pipeline.sessions.load(session_id).history, ensure_ascii=False, indent=2))
                 elif command == "/session" and value:
+                    saved = pipeline.sessions.load_context(value)
+                    if saved:
+                        _restore_context(context, saved)
+                    else:
+                        _refresh_context(context)
                     session_id = value
+                    _save_context(pipeline, context, session_id)
                     print(f"Session {session_id} : {len(pipeline.sessions.load(session_id).history)} messages")
                 elif command == "/tools":
                     for schema in pipeline.tools.schemas():
@@ -145,6 +237,7 @@ def _conversation(pipeline: Pipeline, context: PatientContext, session_id: str) 
             continue
 
         try:
+            previous_hits = context.last_hits
             tool_names = _requested_tools(text) if context.patient_id else None
             guard = pipeline.input_guard.check(text)
             if guard.blocked:
@@ -152,9 +245,43 @@ def _conversation(pipeline: Pipeline, context: PatientContext, session_id: str) 
                 continue
             if context.patient_id:
                 print(f"{DIM}Génération locale en cours (Ctrl+C pour interrompre)…{RESET}")
-            _show(pipeline.run(text, session_id, _confirm, tool_names=tool_names))
+            if _show(pipeline.run(text, session_id, _confirm, tool_names=tool_names)):
+                _save_context(pipeline, context, session_id)
+            else:
+                context.last_hits = previous_hits
+            if context.rag_error:
+                print(f"RAG : {context.rag_error}", file=sys.stderr)
         except KeyboardInterrupt:   # le tour n'est pas enregistré : la session reste intacte
+            context.last_hits = previous_hits
             print(f"{DIM}Génération interrompue.{RESET}")
+
+
+def _save_context(pipeline: Pipeline, context: PatientContext, session_id: str) -> None:
+    pipeline.sessions.save_context(session_id, {
+        "patient_id": context.patient_id,
+        "profile_id": context.profile.profile_id if context.profile else "default",
+        "filters": asdict(context.filters),
+        "sources": [asdict(hit) for hit in context.last_hits],
+    })
+
+
+def _refresh_context(context: PatientContext) -> None:
+    if context.profiles and context.profile:
+        context.profile = context.profiles.load(context.profile.profile_id)
+    context.last_hits, context.rag_error = [], ""
+
+
+def _restore_context(context: PatientContext, saved: dict) -> None:
+    # Tout valider avant de remplacer le contexte de la conversation courante.
+    profile = context.profiles.load(saved["profile_id"])
+    patient_id = saved.get("patient_id")
+    if patient_id:
+        context.patients.get_patient(patient_id)
+    filters = Filters(**saved.get("filters", {}))
+    filters.validate()
+    hits = [Hit(**record) for record in saved.get("sources", [])]
+    context.profile, context.patient_id = profile, patient_id
+    context.filters, context.last_hits, context.rag_error = filters, hits, ""
 
 
 def _requested_tools(text: str) -> set[str]:
@@ -195,9 +322,10 @@ def _confirm(call_id: str, tool: str, args: dict) -> bool:
         return False
 
 
-def _show(events: Iterator[Event]) -> None:
+def _show(events: Iterator[Event]) -> bool:
     """Affiche au fil de l'eau les Event du pipeline (en clair)."""
     mid_line = False                # une réponse est en cours sur la ligne
+    completed = False
     try:
         for event in events:
             if event.type == "token":
@@ -214,7 +342,10 @@ def _show(events: Iterator[Event]) -> None:
                 print(f"{DIM}← {event.data['content']}{RESET}")
             elif event.type == "error":
                 print(event.data, file=sys.stderr)
+            elif event.type == "done":
+                completed = True
     finally:
         events.close()              # sur Ctrl+C : ferme le flux, Ollama arrête de générer
         if mid_line:
             print()
+    return completed
