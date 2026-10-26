@@ -9,6 +9,8 @@ Ce module complète le PIIVault, mais ne le remplace pas.
 
 import re
 
+from sensai.guardrails.settings import OUTPUT_TYPES
+
 
 class SensaiOutputGuard:
     """Filtre les données sensibles détectables dans une réponse."""
@@ -41,6 +43,19 @@ class SensaiOutputGuard:
         re.IGNORECASE,
     )
 
+    PLACEHOLDERS = {"EMAIL": "[EMAIL_MASQUE]", "TEL": "[TELEPHONE_MASQUE]",
+                    "NIR": "[NIR_MASQUE]", "IBAN": "[IBAN_MASQUE]"}
+
+    def __init__(self, types: tuple[str, ...] = OUTPUT_TYPES):
+        """Types de données masqués, dans cet ordre ([guardrails] output_types)."""
+        patterns = {"EMAIL": self.EMAIL_PATTERN, "TEL": self.PHONE_PATTERN,
+                    "NIR": self.NIR_PATTERN, "IBAN": self.IBAN_PATTERN}
+        self.rules = [(patterns[kind], self.PLACEHOLDERS[kind]) for kind in types]
+
+    @classmethod
+    def from_settings(cls, settings) -> "SensaiOutputGuard":
+        return cls(settings.output_types)
+
     def check(self, text: str) -> str:
         """Renvoie une version filtrée du texte."""
 
@@ -50,9 +65,7 @@ class SensaiOutputGuard:
         if not text:
             return text
 
-        result = self.EMAIL_PATTERN.sub("[EMAIL_MASQUE]", text)
-        result = self.PHONE_PATTERN.sub("[TELEPHONE_MASQUE]", result)
-        result = self.NIR_PATTERN.sub("[NIR_MASQUE]", result)
-        result = self.IBAN_PATTERN.sub("[IBAN_MASQUE]", result)
+        for pattern, placeholder in self.rules:
+            text = pattern.sub(placeholder, text)
 
-        return result
+        return text
