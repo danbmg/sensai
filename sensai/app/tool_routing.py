@@ -17,10 +17,13 @@ _FIELD = re.compile(r"\b(?:allergi\w*|traitements?|m[ée]dicaments?|ant[ée]c[é
 _FIND = re.compile(r"\b(?:cherche\w*|recherche\w*|trouve\w*)\b.*\bpatient")
 
 
-def requested_tools(text: str) -> set[str]:
-    """Noms des outils plausibles pour cette demande (ensemble vide : aucun outil)."""
+def requested_tools(text: str, keywords: dict[str, tuple[str, ...]] | None = None) -> set[str]:
+    """Noms des outils plausibles pour cette demande (ensemble vide : aucun outil).
+
+    `keywords` : outils des serveurs MCP tiers -> mots qui les proposent ([[mcp.servers]]).
+    """
     query = text.casefold()
-    names = set()
+    names = {name for name, words in (keywords or {}).items() if any(word in query for word in words)}
     if _NOTE.search(query) and _ADD.search(query):
         names.add("add_patient_note")
     elif _FIELD.search(query):

@@ -182,12 +182,19 @@ async def register_mcp_tools(
     registry,
     prefix: str = "",
     dangerous: bool | set[str] = True,
-) -> None:
-    """Enregistre les outils MCP dans le ToolRegistry."""
+    only: set[str] | None = None,
+) -> list[str]:
+    """Enregistre les outils MCP dans le ToolRegistry ; `only` limite aux outils nommés.
+
+    Renvoie les noms enregistrés (préfixe compris).
+    """
     tools = await client.list_tools()
+    registered = []
 
     for tool in tools:
         original_name = tool["name"]
+        if only is not None and original_name not in only:
+            continue
         registered_name = f"{prefix}{original_name}"
 
         async def execute_mcp_tool(
@@ -206,3 +213,6 @@ async def register_mcp_tools(
             source=f"mcp:{client.name}",
             dangerous=dangerous if isinstance(dangerous, bool) else original_name in dangerous,
         )
+        registered.append(registered_name)
+
+    return registered
