@@ -49,7 +49,7 @@ Le manifeste `corpus/sources.json` décrit uniquement des sources publiques.
 `fetch` télécharge explicitement dans `.sensai/corpus` ; les fichiers déjà présents
 sont conservés, sauf avec `--overwrite`. Les redirections sont contrôlées et TLS
 reste vérifié. Un intermédiaire public supplémentaire est fourni pour le serveur
-HAS : voir [sa provenance](../corpus/tls/README.md).
+HAS : voir sa provenance dans `corpus/tls/README.md`.
 La conversation ne télécharge rien sur Internet.
 
 ## Ajouter un document

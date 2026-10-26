@@ -2,6 +2,13 @@
 
 Assistant médical local en Python, via l'API HTTP directe d'Ollama.
 
+La documentation complète (scénario, user stories, choix, limites, mesures) se lit avec
+MkDocs, installé par `requirements.txt` :
+
+```bash
+mkdocs serve -a 127.0.0.1:8001      # http://127.0.0.1:8001
+```
+
 ## Installation
 
 Python 3.10 ou plus récent, Ollama et un modèle compatible avec les outils :
@@ -14,6 +21,36 @@ ollama pull qwen2.5:3b
 ```
 
 Si Ollama n'est pas déjà lancé, démarrer `ollama serve` dans un autre terminal.
+
+Facultatif : le serveur MCP tiers déclaré dans `config.toml` (`mcp-server-time`) a ses propres
+dépendances et s'installe à part. Sans lui, `--mcp` le signale et continue.
+
+```bash
+python3 -m venv .sensai/mcp-time
+.sensai/mcp-time/bin/pip install "mcp-server-time==2026.10.10"
+```
+
+## Interface web
+
+```bash
+python -m sensai.web --demo --mcp            # http://127.0.0.1:8000
+```
+
+Mêmes options que la CLI (`--model`, `--config`, `--db`, `--no-rag`…), plus `--port`.
+La page affiche la réponse en streaming, le compteur de tokens, les sources, les appels
+d'outils, le prompt exact envoyé au modèle, et ouvre une fenêtre de validation avant toute
+écriture dans un dossier. Le serveur n'écoute que sur `127.0.0.1` et n'a pas
+d'authentification.
+
+## Logs et métriques
+
+Chaque tour ajoute une ligne JSON pseudonymisée à `logs/AAAA-MM-JJ.jsonl`
+(`[logging]` dans `config.toml`). Le résumé (volume, latence, taux d'erreur, par modèle et
+par configuration) est sur `http://127.0.0.1:8000/metrics.html`, ou dans le terminal :
+
+```bash
+python -m sensai.obs --days 7
+```
 
 ## Démo médicale
 
@@ -134,11 +171,15 @@ désactive la recherche. Voir [le guide RAG](docs/rag.md) pour l'ingestion et le
 - Contexte patient local, actualisé à chaque tour, avec provenance SQLite.
 - Ingestion PDF/HTML/texte public ANSM/HAS, embeddings Nomic via `/api/embed`, recherche cosinus.
 - Extraits sourcés injectés via `ContextProvider`, filtres et reclassement lexical BM25.
-- Outils locaux et transport MCP stdio pour les outils patients.
+- Outils locaux et transport MCP stdio pour les outils patients ; serveurs MCP tiers déclarés
+  dans `[[mcp.servers]]` (serveur officiel `mcp-server-time` fourni en exemple).
 - Confirmation humaine avant les écritures par outil ou commande `/note`.
-- Détection de certaines injections et pseudonymisation avant envoi au modèle.
+- Détection de certaines injections et pseudonymisation avant envoi au modèle ; règles
+  réglables dans `[guardrails]`.
+- Interface web : streaming SSE, validation dans une fenêtre, réglages et modèle modifiables à chaud.
+- Logs JSONL pseudonymisés et tableau de bord des métriques.
 
-L'évaluation automatique, l'interface web et le monitoring restent hors de cette livraison.
+L'évaluation automatique par un LLM-juge (EV1) et la sortie JSON imposée (T5) ne sont pas livrées.
 La pseudonymisation combine les dossiers connus et des expressions régulières ;
 elle ne constitue pas une détection exhaustive de toutes les données personnelles.
 La base locale et son coffre de correspondances ne sont pas chiffrés.
@@ -159,10 +200,18 @@ La démo de stockage autonome ne nécessite ni modèle ni connexion MCP :
 python3 -m sensai.memory.demo
 ```
 
+Mesure avec le vrai modèle, réponse avec ou sans dossier et documents (≈ 15 min sur CPU) :
+
+```bash
+python -m sensai.obs.compare --runs 2
+```
+
 ## Documentation
 
-- [Scénario de soutenance](docs/midterm.md)
-- [API de stockage et choix techniques](docs/memory.md)
-- [Ingestion et recherche documentaire](docs/rag.md)
-- [User stories](docs/user_stories.md)
-- [Benchmark des modèles](docs/bench.md)
+Le site MkDocs (`mkdocs serve -a 127.0.0.1:8001`) regroupe :
+
+- [Scénario d'usage](docs/scenario.md), [user stories](docs/user_stories.md), [traçabilité](docs/tracabilite.md)
+- [Installation](docs/installation.md), [fonctionnalités](docs/fonctionnalites.md), [démo](docs/demo.md)
+- [Architecture et contexte](docs/architecture.md), [choix et alternatives](docs/choix.md), [limites](docs/limites.md)
+- [Mesures avec ou sans contexte](docs/mesures.md), [benchmark des modèles](docs/bench.md)
+- [Mémoire](docs/memory.md), [documents publics](docs/rag.md), [démo de mi-parcours](docs/midterm.md)
