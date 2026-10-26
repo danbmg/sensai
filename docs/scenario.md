@@ -84,6 +84,6 @@ Ce scénario n'a pas changé depuis le début du projet :
 - **5 octobre (bootstrap)** : il sert déjà de cas de mesure pour choisir le modèle — dossier
   de `[PATIENT_1]` allergique aux pénicillines, question sur l'amoxicilline, outil
   `add_patient_note` ([Choix du modèle](bench.md), commit `b35d135`).
-- **14 octobre (mi-parcours)** : démo sur le même cas ([archive](midterm.md)).
+- **14 octobre** : démo du même cas, rejouée avec le vrai modèle ([Vérification de la démo](demo_verified.md)).
 - **28 octobre** : mesure avec / sans contexte, toujours sur la même question
   ([Mesures](mesures.md)).

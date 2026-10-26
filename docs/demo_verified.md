@@ -65,7 +65,7 @@ Cette répétition ne valide pas un RAG documentaire : la source utilisée est S
 
 ## Vérifications complémentaires — 21 octobre 2026
 
-Les profils M1, le RAG R1 et le bonus R2 ont été ajoutés depuis cette répétition.
+Les profils M1, le RAG R1 et R2 ont été ajoutés depuis cette répétition.
 La suite complète, après les optimisations ci-dessous, passe : **240 tests et 9 sous-tests**, avec des modèles simulés
 pour la génération et un vrai serveur MCP pour les tests d'intégration concernés.
 

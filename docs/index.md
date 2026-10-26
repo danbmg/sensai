@@ -17,20 +17,18 @@ patient ne quitte la machine, et aucun framework LLM n'est utilisé (appels HTTP
 
 ## Fonctionnalités livrées
 
-Les étoiles sont la difficulté donnée par le catalogue du sujet.
-
-| Code | Fonctionnalité | Étoiles | Dans Sensai |
-|---|---|---|---|
-| B1 | Chatbot CLI (base obligatoire) | — | `python -m sensai` : streaming, historique, erreurs, modèle configurable |
-| M1 | Sessions persistantes et profils | ⭐ | sessions SQLite reprises au redémarrage, profil médecin injecté |
-| M3 | Mémoire structurée externe | ⭐⭐ | dossiers patients SQLite lus et modifiés par l'agent |
-| T1 | Outils et MCP | ⭐⭐⭐ | outils patients, en local ou via notre serveur MCP (`--mcp`) ; serveurs MCP tiers déclarés dans `config.toml` |
-| R1 | RAG de base | ⭐⭐ | notices ANSM / HAS découpées, vectorisées (Nomic), extraits cités |
-| R2 | RAG avancé | ⭐⭐⭐ | filtres par métadonnées, reclassement BM25, seuils de pertinence |
-| A3 | Validation humaine | ⭐ | toute écriture dans un dossier attend l'accord du médecin |
-| EV2 | Garde-fous contenu et données personnelles | ⭐⭐⭐ | pseudonymisation avant le modèle, filtre d'entrée et masquage en sortie réglables dans `config.toml` |
-| EV3 | Logs et tableau de bord | ⭐⭐ | un JSONL pseudonymisé par jour, page `/metrics.html` |
-| X1 | Interface web | ⭐ | `python -m sensai.web` : streaming SSE, confirmation, réglages |
+| Code | Fonctionnalité | Dans Sensai |
+|---|---|---|
+| B1 | Chatbot en ligne de commande | `python -m sensai` : streaming, historique, erreurs, modèle configurable |
+| M1 | Sessions persistantes et profils | sessions SQLite reprises au redémarrage, profil médecin injecté |
+| M3 | Mémoire structurée externe | dossiers patients SQLite lus et modifiés par l'agent |
+| T1 | Outils et MCP | outils patients, en local ou via notre serveur MCP (`--mcp`) ; serveurs MCP tiers déclarés dans `config.toml` |
+| R1 | RAG de base | notices ANSM / HAS découpées, vectorisées (Nomic), extraits cités |
+| R2 | RAG avancé | filtres par métadonnées, reclassement BM25, seuils de pertinence |
+| A3 | Validation humaine | toute écriture dans un dossier attend l'accord du médecin |
+| EV2 | Garde-fous contenu et données personnelles | pseudonymisation avant le modèle, filtre d'entrée et masquage en sortie réglables dans `config.toml` |
+| EV3 | Logs et tableau de bord | un JSONL pseudonymisé par jour, page `/metrics.html` |
+| X1 | Interface web | `python -m sensai.web` : streaming SSE, confirmation, réglages |
 
 Les fonctionnalités prévues mais non livrées (EV1, T5) sont listées dans
 [Traçabilité](tracabilite.md#fonctionnalites-abandonnees-ou-modifiees).

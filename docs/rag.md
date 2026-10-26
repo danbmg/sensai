@@ -1,4 +1,4 @@
-# Documents publics — R1 et bonus R2
+# Documents publics — R1 et R2
 
 ## Préparation et utilisation
 
@@ -89,7 +89,7 @@ préserve sa version précédente. `--force` impose le recalcul.
 3. `store.py` conserve documents, métadonnées, texte et vecteurs float32
    normalisés dans `.sensai/rag.sqlite3`, séparé de `.sensai/memory.sqlite3`.
 4. `retrieval.py` applique les filtres, encode la question pseudonymisée, calcule
-   la similarité cosinus et retient jusqu'à vingt candidats. Le bonus R2 combine
+   la similarité cosinus et retient jusqu'à vingt candidats. R2 combine
    70 % de similarité et 30 % de BM25 normalisé (`bm25 / (bm25 + 2)`).
 5. Les seuils par défaut sont 0,70 pour le cosinus et 0,50 pour le score final.
    Les copies identiques sont retirées. Au maximum trois extraits sont retenus,
@@ -127,8 +127,8 @@ Une recherche vide le précise explicitement.
 Les seuils ont été vérifiés sur quelques recherches françaises de démonstration,
 dont deux questions hors sujet ; ce n'est pas une évaluation clinique ni une
 garantie de pertinence pour toute question. La détection PII conserve ses limites
-documentées dans le README. L'évaluation globale du modèle relève de la partie
-prévue pour les autres membres du groupe.
+documentées dans le README. L'évaluation automatique des réponses (EV1) n'est pas
+livrée ; une mesure avec et sans documents est dans [Mesures](mesures.md).
 
 ## Fichiers et vérification
 
