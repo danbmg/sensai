@@ -1,0 +1,64 @@
+site_name: Sensai
+site_description: Assistant IA 100 % local pour un cabinet médical (projet Epitech)
+repo_url: https://github.com/EpitechPGE3-2026/G-AIA-500-NCE-5-1-sensai-5
+docs_dir: docs
+
+theme:
+  name: material
+  language: fr
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - content.code.copy
+    - search.highlight
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      toggle: {icon: material/weather-night, name: Mode sombre}
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      toggle: {icon: material/weather-sunny, name: Mode clair}
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc: {permalink: true}
+  - pymdownx.details
+  - pymdownx.tabbed: {alternate_style: true}
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+validation:
+  links:
+    anchors: warn
+
+nav:
+  - Accueil: index.md
+  - Cas d'usage:
+      - Scénario d'usage: scenario.md
+      - User stories: user_stories.md
+      - Traçabilité: tracabilite.md
+  - Utiliser Sensai:
+      - Installation: installation.md
+      - Fonctionnalités: fonctionnalites.md
+      - Démo: demo.md
+  - Conception:
+      - Architecture et contexte: architecture.md
+      - Choix et alternatives: choix.md
+      - Limites: limites.md
+  - Mesures:
+      - Avec ou sans contexte: mesures.md
+      - Choix du modèle: bench.md
+  - Détails par module:
+      - Mémoire (M1, M3): memory.md
+      - Documents publics (R1, R2): rag.md
+  - Archives:
+      - Démo de mi-parcours: midterm.md
+      - Vérification de la démo: demo_verified.md

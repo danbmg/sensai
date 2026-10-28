@@ -2,7 +2,7 @@
 
 Ce document conserve le scénario de la soutenance du 14 octobre 2026.
 Depuis le 21 octobre, les profils et le RAG sont disponibles : voir
-[le README](../README.md) et [le guide documentaire](rag.md) pour le parcours actuel.
+[l'accueil](index.md) et [le guide documentaire](rag.md) pour le parcours actuel.
 
 ## Préparation
 

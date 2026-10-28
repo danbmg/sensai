@@ -20,3 +20,6 @@ venv/
 # Généré à l'exécution
 logs/
 .sensai/
+
+# MkDocs (mkdocs build)
+site/

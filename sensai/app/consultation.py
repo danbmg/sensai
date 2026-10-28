@@ -150,7 +150,8 @@ class Consultation:
     def ask(self, text: str, confirm: ConfirmFn) -> Iterator[Event]:
         """Un tour du pipeline, puis les sources retenues ; un tour raté garde les sources d'avant."""
         previous = self.context.last_hits
-        tool_names = requested_tools(text) if self.patient_id else None
+        keywords = getattr(self.runtime.tools, "keywords", {})     # outils des serveurs MCP tiers
+        tool_names = requested_tools(text, keywords) if self.patient_id else None
         completed = False
         events = self.runtime.pipeline.run(text, self.session_id, confirm, tool_names=tool_names)
         try:

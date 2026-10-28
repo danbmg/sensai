@@ -7,6 +7,7 @@ Respecte le contrat InputGuard défini dans core/interfaces.py.
 import re
 
 from sensai.core.interfaces import GuardResult
+from sensai.guardrails.settings import INPUT_FAMILIES, GuardRule
 
 
 class SensaiInputGuard:
@@ -43,6 +44,24 @@ class SensaiInputGuard:
         ),
     )
 
+    REASONS = {
+        "injection": "Requête refusée : tentative de contournement des instructions.",
+        "secrets": "Requête refusée : demande d'extraction de données sensibles.",
+    }
+
+    def __init__(self, families: tuple[str, ...] = INPUT_FAMILIES,
+                 custom_rules: tuple[GuardRule, ...] = (), max_input_length: int = MAX_INPUT_LENGTH):
+        """Familles de règles intégrées retenues, puis règles propres au cabinet ([guardrails])."""
+        patterns = {"injection": self.INJECTION_PATTERNS, "secrets": self.SENSITIVE_EXTRACTION_PATTERNS}
+        self.max_input_length = max_input_length
+        self.rules = [(pattern, self.REASONS[family]) for family in families for pattern in patterns[family]]
+        self.rules += [(re.compile(rule.pattern, re.IGNORECASE | re.DOTALL), rule.reason)
+                       for rule in custom_rules]
+
+    @classmethod
+    def from_settings(cls, settings) -> "SensaiInputGuard":
+        return cls(settings.input_rules, settings.custom_rules, settings.max_input_length)
+
     def check(self, text: str) -> GuardResult:
         """Renvoie blocked=True si la requête doit être refusée."""
 
@@ -58,24 +77,14 @@ class SensaiInputGuard:
                 reason="La requête ne peut pas être vide.",
             )
 
-        if len(text) > self.MAX_INPUT_LENGTH:
+        if len(text) > self.max_input_length:
             return GuardResult(
                 blocked=True,
                 reason="La requête dépasse la taille maximale autorisée.",
             )
 
-        for pattern in self.INJECTION_PATTERNS:
+        for pattern, reason in self.rules:
             if pattern.search(text):
-                return GuardResult(
-                    blocked=True,
-                    reason="Requête refusée : tentative de contournement des instructions.",
-                )
-
-        for pattern in self.SENSITIVE_EXTRACTION_PATTERNS:
-            if pattern.search(text):
-                return GuardResult(
-                    blocked=True,
-                    reason="Requête refusée : demande d'extraction de données sensibles.",
-                )
+                return GuardResult(blocked=True, reason=reason)
 
         return GuardResult(blocked=False)

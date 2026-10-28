@@ -46,6 +46,8 @@ class ToolRegistry:
     def __init__(self, runner: AsyncRunner | None = None):
         self._tools: dict[str, dict[str, Any]] = {}
         self.runner = runner
+        # Outil tiers -> mots qui le proposent au modèle quand un dossier est ouvert.
+        self.keywords: dict[str, tuple[str, ...]] = {}
 
     def register(
         self,

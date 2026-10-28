@@ -12,18 +12,20 @@ import sqlite3
 import threading
 import uuid
 from contextlib import contextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Iterator
 
 from sensai.app.consultation import Consultation
 from sensai.core.config import Config, load_config, validate_config
+from sensai.core.defaults import NullGuard, NullOutputGuard
 from sensai.core.interfaces import Message, PIIVault
 from sensai.core.ollama_client import OLLAMA_ERRORS, OllamaClient, describe_error
 from sensai.core.pipeline import Pipeline, TurnRecord
 from sensai.guardrails.input_guardrail import SensaiInputGuard
 from sensai.guardrails.output_guardrail import SensaiOutputGuard
 from sensai.guardrails.pii_vault import SensaiPIIVault
+from sensai.guardrails.settings import GuardrailSettings, load_guardrail_settings
 from sensai.memory.context import PatientContext
 from sensai.memory.fixtures import seed_demo_patients
 from sensai.memory.patients import PatientStore
@@ -36,6 +38,7 @@ from sensai.rag.retrieval import Retriever
 from sensai.rag.settings import RAGSettings, load_settings, resolve_index_path
 from sensai.rag.store import VectorStore
 from sensai.tools.runtime import medical_tools
+from sensai.tools.settings import MCPServer, load_mcp_servers
 
 DEMO_PATIENT = "demo-dupont"
 # Réglages modifiables pendant l'exécution (web : PUT /api/config).
@@ -108,12 +111,15 @@ class Settings:
     model: Config               # [model] et [assistant]
     rag: RAGSettings            # [rag]
     logs: LogSettings           # [logging]
+    guards: GuardrailSettings = field(default_factory=GuardrailSettings)   # [guardrails]
+    mcp_servers: tuple[MCPServer, ...] = ()                                # [[mcp.servers]]
 
     @classmethod
     def load(cls, options: RuntimeOptions) -> "Settings":
         """Lève ConfigError si config.toml est absent ou invalide."""
         return cls(load_config(options.config, model=options.model), load_settings(options.config),
-                   load_log_settings(options.config))
+                   load_log_settings(options.config), load_guardrail_settings(options.config),
+                   load_mcp_servers(options.config))
 
 
 @dataclass
@@ -202,7 +208,9 @@ class Runtime:
         self.pipeline = Pipeline(
             self.client, cfg.system_prompt, cfg.max_tool_iterations,
             max_history_turns=cfg.max_history_turns,
-            input_guard=SensaiInputGuard(), output_guard=SensaiOutputGuard(),
+            input_guard=SensaiInputGuard.from_settings(settings.guards) if settings.guards.enabled else NullGuard(),
+            output_guard=(SensaiOutputGuard.from_settings(settings.guards) if settings.guards.enabled
+                          else NullOutputGuard()),
             vault_factory=self.vault, context=_SessionContexts(self),
             sessions=stores.sessions, tools=tools, on_turn=self._on_turn,
         )
@@ -329,5 +337,5 @@ def open_runtime(options: RuntimeOptions, *, settings: Settings | None = None,
     settings = settings or Settings.load(options)
     stores = stores or Stores.open(options.db, options.demo)
     retriever, documents = build_retriever(settings, options)
-    with medical_tools(stores.patients, options.mcp) as tools:
+    with medical_tools(stores.patients, options.mcp, settings.mcp_servers) as tools:
         yield Runtime(options, settings, stores, tools, retriever=retriever, rag_documents=documents)
