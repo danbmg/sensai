@@ -40,7 +40,7 @@ Ouvrir `http://127.0.0.1:8000` et, dans un second onglet, `http://127.0.0.1:8000
 | 8 | Onglet métriques | les tours de la démo, latence, aucun nom en clair | EV3 |
 | 9 | « Réglages » : passer `num_predict` à 32, reposer la question 2 | réponse coupée : un paramètre change le comportement sans toucher au code | X1, config |
 
-Puis, en CLI, une minute pour la base obligatoire (B1) :
+Puis, en CLI, une minute pour la CLI (B1) :
 
 ```bash
 python -m sensai --model nexiste:pas                       # erreur claire : ollama pull …

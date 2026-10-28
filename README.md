@@ -55,7 +55,7 @@ python -m sensai.obs --days 7
 ## Démo médicale
 
 ```bash
-python -m sensai --demo --mcp --session midterm
+python -m sensai --demo --mcp --session consultation
 ```
 
 `--demo` charge trois patients entièrement fictifs et sélectionne Mme Jeanne Dupont.
@@ -64,7 +64,7 @@ Sans `--mcp`, les mêmes outils patients sont exécutés directement en Python.
 Les sessions et dossiers sont sauvegardés dans `.sensai/memory.sqlite3`, ignoré par Git.
 
 Le modèle est configurable dans `config.toml` ou avec `--model`.
-Le scénario conseillé et les limites se trouvent dans [docs/midterm.md](docs/midterm.md).
+Le déroulé de la démo est dans [docs/demo.md](docs/demo.md), les limites dans [docs/limites.md](docs/limites.md).
 
 Les réglages CPU dans `config.toml` limitent le contexte à 2 048 tokens, la réponse
 à 128 tokens et l'exécution à deux threads. Par défaut, le modèle est déchargé après chaque
@@ -83,7 +83,7 @@ Si suffisamment de RAM est disponible, garder le modèle chargé pendant deux mi
 peut éviter son rechargement entre deux échanges :
 
 ```bash
-python -m sensai --demo --mcp --session midterm --keep-alive 2m
+python -m sensai --demo --mcp --session consultation --keep-alive 2m
 ```
 
 Cette option concerne le modèle de conversation et consomme de la RAM entre les appels.
@@ -115,7 +115,7 @@ Commandes :
 Pour reprendre la démo après arrêt :
 
 ```bash
-python -m sensai --demo --mcp --session midterm
+python -m sensai --demo --mcp --session consultation
 ```
 
 Pour lister les sessions sans utiliser le modèle :
@@ -214,4 +214,4 @@ Le site MkDocs (`mkdocs serve -a 127.0.0.1:8001`) regroupe :
 - [Installation](docs/installation.md), [fonctionnalités](docs/fonctionnalites.md), [démo](docs/demo.md)
 - [Architecture et contexte](docs/architecture.md), [choix et alternatives](docs/choix.md), [limites](docs/limites.md)
 - [Mesures avec ou sans contexte](docs/mesures.md), [benchmark des modèles](docs/bench.md)
-- [Mémoire](docs/memory.md), [documents publics](docs/rag.md), [démo de mi-parcours](docs/midterm.md)
+- [Mémoire](docs/memory.md), [documents publics](docs/rag.md), [vérification de la démo](docs/demo_verified.md)

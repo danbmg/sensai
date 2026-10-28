@@ -8,7 +8,7 @@ démo autonome et tests du stockage et de l'intégration CLI.
 
 Les sessions, le profil sélectionné, le dossier patient et les documents publics
 RAG sont branchés à la CLI via les interfaces existantes. La partie documentaire
-R1 et le bonus R2 sont décrits dans [rag.md](rag.md).
+R1 et R2 sont décrits dans [rag.md](rag.md).
 
 ## Démonstration
 
@@ -27,9 +27,9 @@ pas des réponses produites par un modèle. La base temporaire est supprimée à
 Pour conserver la base et vérifier la persistance entre deux processus :
 
 ```bash
-python3 -m sensai.memory.demo --db /tmp/sensai-midterm.sqlite3
-python3 -c 'from sensai.memory.patients import PatientStore; print(PatientStore("/tmp/sensai-midterm.sqlite3").get_patient("demo-dupont"))'
-python3 -c 'from sensai.memory.sessions import SQLiteSessionStore; print(SQLiteSessionStore("/tmp/sensai-midterm.sqlite3").load("demo-session"))'
+python3 -m sensai.memory.demo --db /tmp/sensai-demo.sqlite3
+python3 -c 'from sensai.memory.patients import PatientStore; print(PatientStore("/tmp/sensai-demo.sqlite3").get_patient("demo-dupont"))'
+python3 -c 'from sensai.memory.sessions import SQLiteSessionStore; print(SQLiteSessionStore("/tmp/sensai-demo.sqlite3").load("demo-session"))'
 ```
 
 Relancer la démo sur la même base préserve les patients existants et ajoute une
@@ -42,7 +42,7 @@ Utiliser un fichier dédié à la démo, hors du dépôt.
 from sensai.memory.patients import PatientStore
 from sensai.memory.fixtures import seed_demo_patients
 
-patients = PatientStore("/tmp/sensai-midterm.sqlite3")
+patients = PatientStore("/tmp/sensai-demo.sqlite3")
 seed_demo_patients(patients)  # uniquement pour la démo ; aucun écrasement
 matches = patients.find_patients("Dupont")
 patient = patients.resolve_patient("Jeanne Dupont")
@@ -83,7 +83,7 @@ réidentification. Aucun appel Ollama ou MCP n'est effectué par cette API.
 ```python
 from sensai.memory.sessions import SQLiteSessionStore
 
-sessions = SQLiteSessionStore("/tmp/sensai-midterm.sqlite3")
+sessions = SQLiteSessionStore("/tmp/sensai-demo.sqlite3")
 # À la construction du Pipeline existant : sessions=sessions
 # À chaque reprise : réutiliser le même session_id dans pipeline.run(...).
 ```

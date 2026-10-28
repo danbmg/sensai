@@ -207,7 +207,7 @@ Critères d'acceptation :
 - Une recherche sans extrait pertinent est signalée dans le contexte sans inventer de source.
 - Le scénario Mme Dupont associe le dossier local et les extraits publics utiles sans mélanger leurs stockages.
 
-### R2 — Limiter les documents recherchés (bonus livré)
+### R2 — Limiter les documents recherchés (livré)
 
 En tant que médecin, je souhaite filtrer les documents par éditeur, étiquettes et date connue, afin de rechercher dans les sources adaptées à ma question.
 
@@ -217,7 +217,7 @@ Critères d'acceptation :
 - Les documents sans date connue sont exclus lorsqu'une période est demandée.
 - Un filtre sans résultat retourne une recherche vide sans appeler le modèle d'embeddings.
 
-### R2 — Écarter les extraits peu pertinents (bonus livré avec BM25)
+### R2 — Écarter les extraits peu pertinents (livré avec BM25)
 
 En tant que médecin, je souhaite que les passages retenus soient reclassés et soumis à des seuils de pertinence, afin de limiter les extraits inutiles dans le contexte.
 

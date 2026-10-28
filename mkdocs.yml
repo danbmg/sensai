@@ -60,5 +60,4 @@ nav:
       - Mémoire (M1, M3): memory.md
       - Documents publics (R1, R2): rag.md
   - Archives:
-      - Démo de mi-parcours: midterm.md
       - Vérification de la démo: demo_verified.md
