@@ -16,6 +16,9 @@ Chaque histoire indique l'étape du [scénario d'usage](scenario.md) qu'elle ser
 (préparation du poste) ou **S0** à **S5** (consultation). Les tests qui la vérifient sont
 dans [Traçabilité](#user-story--étape--vérification).
 
+EV1 (évaluation par un LLM-juge) et T5 (sortie JSON imposée) n'ont pas été livrées : voir
+[Traçabilité](#fonctionnalités-abandonnées-ou-modifiées).
+
 Format :
 
 ```
@@ -27,9 +30,9 @@ Critères d'acceptation :
 - <comportement observable 3>
 ```
 
-### Dan — B1, X1, A3, EV3
+### B1 — Chatbot en ligne de commande
 
-#### B1 — Voir la réponse s'écrire
+#### Voir la réponse s'écrire
 
 Scénario : [**S0**](scenario.md#le-scénario-fil-rouge-de-la-démo) — la réponse s'affiche au fil de l'eau.
 
@@ -41,7 +44,7 @@ Critères d'acceptation :
 - Une entrée vide est ignorée, sans appel au modèle.
 - Ctrl+C pendant la génération arrête la réponse ; la session reste ouverte et le tour interrompu n'est pas enregistré.
 
-#### B1 — Garder le fil de la consultation
+#### Garder le fil de la consultation
 
 Scénario : [**S0**](scenario.md#le-scénario-fil-rouge-de-la-démo) — les questions de suivi pendant la consultation.
 
@@ -53,7 +56,7 @@ Critères d'acceptation :
 - `/reset` ouvre une nouvelle conversation : les échanges précédents ne sont plus envoyés au modèle.
 - Au-delà de `max_history_turns` tours, seuls les derniers tours sont envoyés ; l'occupation du contexte est affichée après chaque réponse.
 
-#### B1 — Comprendre une panne sans trace technique
+#### Comprendre une panne sans trace technique
 
 Scénario : [**S0**](scenario.md#le-scénario-fil-rouge-de-la-démo) — ouvrir la consultation alors qu'Ollama ne répond pas.
 
@@ -65,7 +68,7 @@ Critères d'acceptation :
 - Modèle absent : le message indique la commande `ollama pull <modèle>`.
 - Modèle sans capacité `tools` : refus au démarrage ; modèle `thinking` : avertissement.
 
-#### B1 — Changer de modèle sans toucher au code
+#### Changer de modèle sans toucher au code
 
 Scénario : [**P**](scenario.md#le-scénario-fil-rouge-de-la-démo) — le prestataire choisit le modèle adapté au PC du cabinet.
 
@@ -77,93 +80,9 @@ Critères d'acceptation :
 - `--config autre.toml` charge un autre fichier de configuration.
 - Aucun nom de modèle n'est écrit en dur dans le code Python.
 
-#### X1 — Consulter depuis le navigateur
+### M1 — Sessions persistantes et profils médecin
 
-Scénario : [**S0**](scenario.md#le-scénario-fil-rouge-de-la-démo) — le médecin ouvre la consultation dans le navigateur.
-
-En tant que médecin, je souhaite utiliser l'assistant dans une page web, afin de travailler sans terminal.
-
-Critères d'acceptation :
-
-- `python -m sensai.web --demo` sert l'interface sur `http://127.0.0.1:8000`.
-- La réponse s'affiche en streaming, avec le nombre de tokens et l'occupation du contexte.
-- Les appels d'outils et les sources du dernier tour sont affichés à côté de la conversation.
-
-#### X1 — Choisir le patient, le profil et le modèle
-
-Scénario : [**S0**](scenario.md#le-scénario-fil-rouge-de-la-démo) — ouvrir la consultation de Mme Dupont avec le profil du médecin.
-
-En tant que médecin, je souhaite ouvrir une consultation pour un patient et un profil, et changer de modèle ou de réglage depuis la page, afin d'adapter l'assistant sans relancer le serveur.
-
-Critères d'acceptation :
-
-- Le sélecteur de modèle liste les modèles installés dans Ollama.
-- La fenêtre « Réglages » modifie température, `num_predict`, `num_ctx` et nombre de tours d'historique ; une valeur invalide est refusée sans rien changer.
-- La liste des consultations permet de reprendre une session enregistrée, avec son patient.
-
-#### X1 — Voir ce que le modèle a reçu
-
-Scénario : [**S1**](scenario.md#le-scénario-fil-rouge-de-la-démo) — vérifier que « Mme Dupont » est partie sous la forme `[PATIENT_1]`.
-
-En tant que médecin, je souhaite afficher le prompt exact envoyé au modèle, afin de vérifier qu'aucun nom de patient n'en sort.
-
-Critères d'acceptation :
-
-- « Voir le prompt envoyé » affiche les messages du dernier tour, tels que le modèle les a reçus.
-- Ces messages contiennent `[PATIENT_1]`, jamais le nom réel.
-- Le nombre de tokens lus et la taille de la fenêtre de contexte sont affichés.
-
-#### A3 — Valider une écriture dans le dossier
-
-Scénario : [**S4**](scenario.md#le-scénario-fil-rouge-de-la-démo) — valider ou refuser la note proposée.
-
-En tant que médecin, je souhaite approuver toute modification d'un dossier avant qu'elle soit écrite, afin que l'IA ne modifie jamais une donnée médicale sans mon accord.
-
-Critères d'acceptation :
-
-- Avant toute écriture, l'outil et ses arguments sont affichés en clair, avec le vrai nom du patient.
-- Si je refuse, le dossier est inchangé et l'assistant indique que l'action n'a pas été exécutée.
-- Si j'accepte, la note apparaît dans le dossier (`/dossier`).
-
-#### A3 — Valider depuis la page web
-
-Scénario : [**S4**](scenario.md#le-scénario-fil-rouge-de-la-démo) — la même validation, dans une fenêtre du navigateur.
-
-En tant que médecin, je souhaite une fenêtre de confirmation dans le navigateur, afin de valider ou refuser une action sans quitter l'interface.
-
-Critères d'acceptation :
-
-- Une demande d'écriture ouvre une fenêtre « Action à valider » avec l'outil et ses arguments.
-- Sans réponse dans les 120 secondes, l'action est refusée.
-- « Valider » écrit la note ; « Refuser » laisse le dossier inchangé.
-
-#### EV3 — Garder une trace de chaque tour, sans données patient
-
-Scénario : [**S5**](scenario.md#le-scénario-fil-rouge-de-la-démo) — chaque tour est journalisé, pseudonymisé.
-
-En tant que responsable du cabinet, je souhaite un journal de chaque échange, afin de pouvoir vérifier après coup ce que l'assistant a fait.
-
-Critères d'acceptation :
-
-- Chaque tour ajoute une ligne JSON à `logs/AAAA-MM-JJ.jsonl` : modèle, prompt et réponse, outils appelés, latence, tokens, configuration.
-- Aucun nom, date de naissance ou adresse de patient n'apparaît en clair dans ces fichiers.
-- Une écriture de log en échec n'interrompt pas la consultation.
-
-#### EV3 — Suivre les performances
-
-Scénario : [**S5**](scenario.md#le-scénario-fil-rouge-de-la-démo) — le tableau de bord montre la latence.
-
-En tant que responsable du cabinet, je souhaite voir le volume, la latence et le taux d'erreur, afin de savoir si un changement de modèle ou de réglage ralentit l'assistant.
-
-Critères d'acceptation :
-
-- `/metrics.html` et `python -m sensai.obs` affichent le nombre de tours, la latence moyenne, p50 et p95, et le taux d'erreur.
-- Les chiffres sont regroupés par modèle et par configuration, version du prompt système comprise.
-- Après un changement de modèle, une nouvelle ligne apparaît dans le tableau « Par modèle ».
-
-### Timothée — M1, M3, R1, R2
-
-#### M1 — Reprendre une session (livré avec SQLite et la CLI)
+#### Reprendre une session
 
 Scénario : [**S0**](scenario.md#le-scénario-fil-rouge-de-la-démo) — reprendre la consultation de Mme Dupont après un redémarrage.
 
@@ -175,7 +94,7 @@ Critères d'acceptation :
 - Les correspondances des pseudonymes sont restaurées avec l'historique.
 - Les sessions sont listables et restent indépendantes ; une session inconnue est vide.
 
-#### M1 — Profil médecin (livré avec SQLite, commandes et injection du contexte)
+#### Profil médecin
 
 Scénario : [**S0**](scenario.md#le-scénario-fil-rouge-de-la-démo) — le profil du Dr Martin est injecté dès l'ouverture de la consultation.
 
@@ -187,7 +106,7 @@ Critères d'acceptation :
 - Le profil sélectionné est injecté dans le contexte initial de la conversation.
 - Une modification du profil est prise en compte à l'ouverture d'une nouvelle conversation.
 
-#### M1 — Garder les conversations séparées (livré avec la reprise du contexte)
+#### Garder les conversations séparées
 
 Scénario : [**S0**](scenario.md#le-scénario-fil-rouge-de-la-démo) — une session par consultation, liée à Mme Dupont.
 
@@ -199,7 +118,7 @@ Critères d'acceptation :
 - Reprendre une nouvelle session enregistrée restaure son patient, son profil, ses filtres et ses dernières sources.
 - Le démarrage refuse de reprendre une session avec un autre patient explicitement demandé.
 
-#### M1 — Choisir un profil médecin (livré avec la CLI)
+#### Choisir un profil médecin
 
 Scénario : [**S0**](scenario.md#le-scénario-fil-rouge-de-la-démo) — ouvrir la consultation avec le profil `generaliste`.
 
@@ -211,7 +130,9 @@ Critères d'acceptation :
 - Un profil inconnu produit une erreur explicite sans modifier le profil courant.
 - Le changement de profil ouvre une nouvelle conversation, avec ses instructions injectées même sans patient sélectionné.
 
-#### M3 — Consulter un dossier (livré avec API, contexte et outils locaux/MCP)
+### M3 — Dossiers patients
+
+#### Consulter un dossier
 
 Scénario : [**S2**](scenario.md#le-scénario-fil-rouge-de-la-démo) — retrouver l'allergie à la pénicilline dans le dossier.
 
@@ -223,7 +144,7 @@ Critères d'acceptation :
 - La recherche par nom retourne tous les patients correspondants sans sélectionner arbitrairement un homonyme.
 - Le jeu fictif contient Mme Jeanne Dupont avec une allergie à la pénicilline.
 
-#### M3 — Mettre à jour un dossier (livré avec validation humaine)
+#### Mettre à jour un dossier
 
 Scénario : [**S4**](scenario.md#le-scénario-fil-rouge-de-la-démo) — la note validée est écrite dans le dossier.
 
@@ -235,7 +156,7 @@ Critères d'acceptation :
 - Modifier un champ conserve les autres champs ; un patient absent ou ambigu provoque une erreur explicite.
 - Une écriture demandée par le modèle n'est exécutée qu'après confirmation du médecin via le pipeline.
 
-#### M3 — Créer un dossier avant la consultation (livré avec la commande `patients add`)
+#### Créer un dossier avant la consultation
 
 Scénario : [**P**](scenario.md#le-scénario-fil-rouge-de-la-démo) — le dossier d'un nouveau patient existe avant sa première consultation.
 
@@ -247,7 +168,7 @@ Critères d'acceptation :
 - Un nom de famille déjà présent dans la base est signalé avant la création, avec ses conséquences sur la pseudonymisation ; refuser ne crée rien.
 - Après la création, le nom et la date de naissance n'apparaissent dans aucun message envoyé au modèle, ni dans les logs, même dans une consultation déjà ouverte.
 
-#### M3 — Supprimer un dossier et ses traces (livré avec la commande `patients delete`)
+#### Supprimer un dossier et ses traces
 
 Scénario : [**P**](scenario.md#le-scénario-fil-rouge-de-la-démo) — un patient demande l'effacement de ses données.
 
@@ -259,60 +180,9 @@ Critères d'acceptation :
 - Les conversations liées au dossier sont supprimées ; le nom et la date de naissance du patient sont retirés du coffre de pseudonymes des autres conversations.
 - Un nom inconnu ou porté par plusieurs dossiers produit une erreur explicite, sans rien supprimer.
 
-#### R1 — Rechercher dans les notices (livré avec ingestion et recherche locale)
+### T1 — Outils et MCP
 
-Scénario : [**S3**](scenario.md#le-scénario-fil-rouge-de-la-démo) — retrouver l'extrait de la notice ANSM de l'amoxicilline.
-
-En tant que médecin, je souhaite retrouver les passages pertinents des notices ANSM et des recommandations HAS, afin d'obtenir des réponses fondées sur mon corpus documentaire local.
-
-Critères d'acceptation :
-
-- Les documents sont découpés en extraits associés à leur source et leur emplacement.
-- Les représentations vectorielles des extraits sont obtenues via l'API HTTP Ollama `/api/embed` avec `nomic-embed-text`.
-- La recherche utilise la similarité cosinus et une requête pseudonymisée, sans indexer les dossiers patients.
-
-#### R1 — Identifier les sources (livré via ContextProvider et /sources)
-
-Scénario : [**S3**](scenario.md#le-scénario-fil-rouge-de-la-démo) — citer la notice avec sa source.
-
-En tant que médecin, je souhaite connaître les sources des extraits utilisés, afin de pouvoir vérifier les informations proposées.
-
-Critères d'acceptation :
-
-- `ContextProvider` transmet chaque extrait retrouvé avec une référence à son document source.
-- Une recherche sans extrait pertinent est signalée dans le contexte sans inventer de source.
-- Le scénario Mme Dupont associe le dossier local et les extraits publics utiles sans mélanger leurs stockages.
-
-#### R2 — Limiter les documents recherchés (livré)
-
-Scénario : [**S3**](scenario.md#le-scénario-fil-rouge-de-la-démo) — ne chercher que dans les sources utiles à la question.
-
-En tant que médecin, je souhaite filtrer les documents par éditeur, étiquettes et date connue, afin de rechercher dans les sources adaptées à ma question.
-
-Critères d'acceptation :
-
-- Les filtres sont appliqués avant le calcul des scores de similarité.
-- Les documents sans date connue sont exclus lorsqu'une période est demandée.
-- Un filtre sans résultat retourne une recherche vide sans appeler le modèle d'embeddings.
-
-#### R2 — Écarter les extraits peu pertinents (livré avec BM25)
-
-Scénario : [**S3**](scenario.md#le-scénario-fil-rouge-de-la-démo) — ne garder que les extraits utiles, dans un contexte limité.
-
-En tant que médecin, je souhaite que les passages retenus soient reclassés et soumis à des seuils de pertinence, afin de limiter les extraits inutiles dans le contexte.
-
-Critères d'acceptation :
-
-- Le reclassement combine la similarité cosinus et un score lexical BM25 ; il peut être désactivé pour comparaison.
-- Les extraits sous les seuils configurés sont écartés et les copies identiques sont dédupliquées.
-- Le nombre d'extraits et leur longueur totale restent limités ; aucune source n'est inventée en cas de recherche vide.
-
-### Matteo — T1, EV2
-
-EV1 (évaluation automatique par un LLM-juge) n'a pas été livrée : voir
-[Traçabilité](#fonctionnalités-abandonnées-ou-modifiées).
-
-#### T1 — Laisser l'assistant consulter le dossier par un outil
+#### Laisser l'assistant consulter le dossier par un outil
 
 Scénario : [**S4**](scenario.md#le-scénario-fil-rouge-de-la-démo) — l'assistant appelle lui-même `add_patient_note`.
 
@@ -324,7 +194,7 @@ Critères d'acceptation :
 - Le résultat d'un outil est renvoyé au modèle, qui termine sa réponse.
 - Un appel d'outil invalide, ou un outil non proposé pour ce tour, est refusé sans action exécutée.
 
-#### T1 — Isoler les outils patients dans un serveur MCP
+#### Isoler les outils patients dans un serveur MCP
 
 Scénario : [**P**](scenario.md#le-scénario-fil-rouge-de-la-démo) et [**S4**](scenario.md#le-scénario-fil-rouge-de-la-démo) — le prestataire active `--mcp` ; la note de S4 passe par le serveur MCP.
 
@@ -336,7 +206,7 @@ Critères d'acceptation :
 - Les mêmes commandes et le même scénario fonctionnent avec et sans `--mcp`.
 - Si le serveur ne démarre pas, un message clair s'affiche, sans trace technique.
 
-#### T1 — Brancher un serveur MCP existant
+#### Brancher un serveur MCP existant
 
 Scénario : [**P**](scenario.md#le-scénario-fil-rouge-de-la-démo) — le prestataire ajoute un outil en déclarant un serveur dans `config.toml`.
 
@@ -348,7 +218,87 @@ Critères d'acceptation :
 - Seuls les outils listés dans `tools` sont retenus ; ceux listés dans `dangerous` demandent la validation du médecin.
 - Si le serveur ne démarre pas, il est signalé et ignoré, et la consultation continue.
 
-#### EV2 — Ne jamais envoyer l'identité d'un patient au modèle
+### R1 — Recherche dans les documents publics
+
+#### Rechercher dans les notices
+
+Scénario : [**S3**](scenario.md#le-scénario-fil-rouge-de-la-démo) — retrouver l'extrait de la notice ANSM de l'amoxicilline.
+
+En tant que médecin, je souhaite retrouver les passages pertinents des notices ANSM et des recommandations HAS, afin d'obtenir des réponses fondées sur mon corpus documentaire local.
+
+Critères d'acceptation :
+
+- Les documents sont découpés en extraits associés à leur source et leur emplacement.
+- Les représentations vectorielles des extraits sont obtenues via l'API HTTP Ollama `/api/embed` avec `nomic-embed-text`.
+- La recherche utilise la similarité cosinus et une requête pseudonymisée, sans indexer les dossiers patients.
+
+#### Identifier les sources
+
+Scénario : [**S3**](scenario.md#le-scénario-fil-rouge-de-la-démo) — citer la notice avec sa source.
+
+En tant que médecin, je souhaite connaître les sources des extraits utilisés, afin de pouvoir vérifier les informations proposées.
+
+Critères d'acceptation :
+
+- `ContextProvider` transmet chaque extrait retrouvé avec une référence à son document source.
+- Une recherche sans extrait pertinent est signalée dans le contexte sans inventer de source.
+- Le scénario Mme Dupont associe le dossier local et les extraits publics utiles sans mélanger leurs stockages.
+
+### R2 — Recherche documentaire avancée
+
+#### Limiter les documents recherchés
+
+Scénario : [**S3**](scenario.md#le-scénario-fil-rouge-de-la-démo) — ne chercher que dans les sources utiles à la question.
+
+En tant que médecin, je souhaite filtrer les documents par éditeur, étiquettes et date connue, afin de rechercher dans les sources adaptées à ma question.
+
+Critères d'acceptation :
+
+- Les filtres sont appliqués avant le calcul des scores de similarité.
+- Les documents sans date connue sont exclus lorsqu'une période est demandée.
+- Un filtre sans résultat retourne une recherche vide sans appeler le modèle d'embeddings.
+
+#### Écarter les extraits peu pertinents
+
+Scénario : [**S3**](scenario.md#le-scénario-fil-rouge-de-la-démo) — ne garder que les extraits utiles, dans un contexte limité.
+
+En tant que médecin, je souhaite que les passages retenus soient reclassés et soumis à des seuils de pertinence, afin de limiter les extraits inutiles dans le contexte.
+
+Critères d'acceptation :
+
+- Le reclassement combine la similarité cosinus et un score lexical BM25 ; il peut être désactivé pour comparaison.
+- Les extraits sous les seuils configurés sont écartés et les copies identiques sont dédupliquées.
+- Le nombre d'extraits et leur longueur totale restent limités ; aucune source n'est inventée en cas de recherche vide.
+
+### A3 — Validation humaine
+
+#### Valider une écriture dans le dossier
+
+Scénario : [**S4**](scenario.md#le-scénario-fil-rouge-de-la-démo) — valider ou refuser la note proposée.
+
+En tant que médecin, je souhaite approuver toute modification d'un dossier avant qu'elle soit écrite, afin que l'IA ne modifie jamais une donnée médicale sans mon accord.
+
+Critères d'acceptation :
+
+- Avant toute écriture, l'outil et ses arguments sont affichés en clair, avec le vrai nom du patient.
+- Si je refuse, le dossier est inchangé et l'assistant indique que l'action n'a pas été exécutée.
+- Si j'accepte, la note apparaît dans le dossier (`/dossier`).
+
+#### Valider depuis la page web
+
+Scénario : [**S4**](scenario.md#le-scénario-fil-rouge-de-la-démo) — la même validation, dans une fenêtre du navigateur.
+
+En tant que médecin, je souhaite une fenêtre de confirmation dans le navigateur, afin de valider ou refuser une action sans quitter l'interface.
+
+Critères d'acceptation :
+
+- Une demande d'écriture ouvre une fenêtre « Action à valider » avec l'outil et ses arguments.
+- Sans réponse dans les 120 secondes, l'action est refusée.
+- « Valider » écrit la note ; « Refuser » laisse le dossier inchangé.
+
+### EV2 — Garde-fous et données personnelles
+
+#### Ne jamais envoyer l'identité d'un patient au modèle
 
 Scénario : [**S1**](scenario.md#le-scénario-fil-rouge-de-la-démo) — « Mme Dupont » devient `[PATIENT_1]` avant l'envoi au modèle.
 
@@ -360,7 +310,7 @@ Critères d'acceptation :
 - « Dupont », « Mme Dupont » et « Jeanne Dupont » donnent le même pseudonyme, d'un tour à l'autre.
 - À l'écran et dans la confirmation, le médecin lit le vrai nom.
 
-#### EV2 — Bloquer les détournements et masquer les fuites
+#### Bloquer les détournements et masquer les fuites
 
 Scénario : [**S1**](scenario.md#le-scénario-fil-rouge-de-la-démo) — la question passe les filtres d'entrée ; la réponse est masquée avant l'historique.
 
@@ -372,7 +322,7 @@ Critères d'acceptation :
 - Une demande d'extraction de mots de passe ou de clés API est refusée.
 - Un téléphone, un email, un NIR ou un IBAN présent dans une réponse est masqué avant l'enregistrement.
 
-#### EV2 — Adapter les règles au cabinet
+#### Adapter les règles au cabinet
 
 Scénario : [**P**](scenario.md#le-scénario-fil-rouge-de-la-démo) — le prestataire ajoute une règle de filtrage dans `config.toml`.
 
@@ -383,6 +333,70 @@ Critères d'acceptation :
 - Une règle `[[guardrails.custom_rules]]` (motif et message) refuse les requêtes qui lui correspondent, avec son propre message.
 - Les familles de règles intégrées et les types de données masquées en sortie se choisissent dans `[guardrails]`.
 - Une règle invalide (expression régulière fausse, famille inconnue) empêche le démarrage avec un message clair.
+
+### EV3 — Logs et tableau de bord
+
+#### Garder une trace de chaque tour, sans données patient
+
+Scénario : [**S5**](scenario.md#le-scénario-fil-rouge-de-la-démo) — chaque tour est journalisé, pseudonymisé.
+
+En tant que responsable du cabinet, je souhaite un journal de chaque échange, afin de pouvoir vérifier après coup ce que l'assistant a fait.
+
+Critères d'acceptation :
+
+- Chaque tour ajoute une ligne JSON à `logs/AAAA-MM-JJ.jsonl` : modèle, prompt et réponse, outils appelés, latence, tokens, configuration.
+- Aucun nom, date de naissance ou adresse de patient n'apparaît en clair dans ces fichiers.
+- Une écriture de log en échec n'interrompt pas la consultation.
+
+#### Suivre les performances
+
+Scénario : [**S5**](scenario.md#le-scénario-fil-rouge-de-la-démo) — le tableau de bord montre la latence.
+
+En tant que responsable du cabinet, je souhaite voir le volume, la latence et le taux d'erreur, afin de savoir si un changement de modèle ou de réglage ralentit l'assistant.
+
+Critères d'acceptation :
+
+- `/metrics.html` et `python -m sensai.obs` affichent le nombre de tours, la latence moyenne, p50 et p95, et le taux d'erreur.
+- Les chiffres sont regroupés par modèle et par configuration, version du prompt système comprise.
+- Après un changement de modèle, une nouvelle ligne apparaît dans le tableau « Par modèle ».
+
+### X1 — Interface web
+
+#### Consulter depuis le navigateur
+
+Scénario : [**S0**](scenario.md#le-scénario-fil-rouge-de-la-démo) — le médecin ouvre la consultation dans le navigateur.
+
+En tant que médecin, je souhaite utiliser l'assistant dans une page web, afin de travailler sans terminal.
+
+Critères d'acceptation :
+
+- `python -m sensai.web --demo` sert l'interface sur `http://127.0.0.1:8000`.
+- La réponse s'affiche en streaming, avec le nombre de tokens et l'occupation du contexte.
+- Les appels d'outils et les sources du dernier tour sont affichés à côté de la conversation.
+
+#### Choisir le patient, le profil et le modèle
+
+Scénario : [**S0**](scenario.md#le-scénario-fil-rouge-de-la-démo) — ouvrir la consultation de Mme Dupont avec le profil du médecin.
+
+En tant que médecin, je souhaite ouvrir une consultation pour un patient et un profil, et changer de modèle ou de réglage depuis la page, afin d'adapter l'assistant sans relancer le serveur.
+
+Critères d'acceptation :
+
+- Le sélecteur de modèle liste les modèles installés dans Ollama.
+- La fenêtre « Réglages » modifie température, `num_predict`, `num_ctx` et nombre de tours d'historique ; une valeur invalide est refusée sans rien changer.
+- La liste des consultations permet de reprendre une session enregistrée, avec son patient.
+
+#### Voir ce que le modèle a reçu
+
+Scénario : [**S1**](scenario.md#le-scénario-fil-rouge-de-la-démo) — vérifier que « Mme Dupont » est partie sous la forme `[PATIENT_1]`.
+
+En tant que médecin, je souhaite afficher le prompt exact envoyé au modèle, afin de vérifier qu'aucun nom de patient n'en sort.
+
+Critères d'acceptation :
+
+- « Voir le prompt envoyé » affiche les messages du dernier tour, tels que le modèle les a reçus.
+- Ces messages contiennent `[PATIENT_1]`, jamais le nom réel.
+- Le nombre de tokens lus et la taille de la fenêtre de contexte sont affichés.
 
 ## 2. Traçabilité
 
@@ -468,7 +482,7 @@ consignées dans [Vérification de la démo](mesures.md#3-vérifications-avec-le
 
 | Élément | Prévu au départ | Ce qui a été fait | Raison | User stories concernées |
 |---|---|---|---|---|
-| **EV1** évaluation par LLM-juge (issue #29) | prévue (Matteo) | **non livrée** | non commencée au 28/10 ; un juge LLM ajouterait un second appel de modèle par tour, sur une latence déjà de 20 à 60 s sur CPU | aucune écrite ; le besoin est décrit dans l'issue #29 |
+| **EV1** évaluation par LLM-juge (issue #29) | prévue | **non livrée** | non commencée au 28/10 ; un juge LLM ajouterait un second appel de modèle par tour, sur une latence déjà de 20 à 60 s sur CPU | aucune écrite ; le besoin est décrit dans l'issue #29 |
 | **T5** sortie JSON imposée (issue #28) | prévue | **non livrée** | non commencée au 28/10 ; le besoin est en partie couvert : arguments d'outils validés par leur schéma JSON, note qui recopie un schéma refusée (`_text` dans `tools/patient_tools.py`) | aucune écrite ; le besoin est décrit dans l'issue #28 |
 | Filtre « hors périmètre médical » et création / suppression de patient par la conversation | ajoutés le 03/11 | **retirés le jour même** (commit `f3d8371`) ; création et suppression **reprises par une commande hors de l'agent** (`python -m sensai.memory.patients`) | le filtre refusait toute question sans mot médical : « Je m'appelle Paul. », la calculatrice, les questions d'heure pour le serveur MCP `time` ; les deux nouveaux outils arrivaient sans user story ni traçabilité ; par la conversation, le nom d'un nouveau patient, pas encore en base, partait en clair au modèle ([Choix](decisions.md#créer-un-dossier-par-une-commande-pas-par-lagent)) | B1 « Garder le fil de la consultation », T1 « Laisser l'assistant consulter le dossier par un outil », T1 « Brancher un serveur MCP existant », M3 « Créer un dossier avant la consultation », M3 « Supprimer un dossier et ses traces » |
 | Budget d'un tour en 30 s | critère de choix du modèle (bench du 05/10) | **abandonné** : 20 à 60 s mesurés selon le contexte | aucun modèle fiable ne le tient sur un CPU portable ; le scénario vise des vérifications ponctuelles, pas une conversation rapide ([Scénario](scenario.md#le-scénario-est-il-réaliste-avec-un-modèle-local-)) | B1 « Voir la réponse s'écrire » |

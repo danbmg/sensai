@@ -119,7 +119,7 @@ Le Dr Martin reçoit Mme Dupont et envisage de lui prescrire de l'amoxicilline. 
 
 ## Le scénario est-il réaliste avec un modèle local ?
 
-C'est la vraie contrainte du projet, mesurée sur le PC de Dan (Intel Core 5 120U, sans GPU,
+C'est la vraie contrainte du projet, mesurée sur le PC de test (Intel Core 5 120U, sans GPU,
 15 Go de RAM) avec `qwen2.5:3b` :
 
 | Mesure | Valeur | Source |

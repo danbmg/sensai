@@ -179,17 +179,17 @@ Les modules communiquent par les contrats de `sensai/core/interfaces.py` (`Input
 Chaque membre a codé son module contre ce fichier ; `sensai/core/defaults.py` fournit des
 versions neutres pour tester le pipeline seul.
 
-| Dossier | Rôle | Membre |
-| --- | --- | --- |
-| `sensai/core/` | pipeline, client HTTP Ollama, configuration, contrats | Dan |
-| `sensai/app/` | assemblage commun à la CLI et au web, consultations, choix des outils proposés | Dan |
-| `sensai/cli.py`, `sensai/web/` | CLI ; API FastAPI et page web (streaming SSE, validation) | Dan |
-| `sensai/obs/` | logs JSONL, métriques, mesure avec ou sans contexte | Dan |
-| `sensai/memory/` | patients, sessions et profils SQLite ; contexte injecté au modèle | Timothée |
-| `sensai/rag/` | ingestion des documents publics, embeddings, index, recherche | Timothée |
-| `sensai/tools/` | outils patients, serveur et client MCP, serveurs tiers | Matteo |
-| `sensai/guardrails/` | coffre de pseudonymes, filtres d'entrée et de sortie | Matteo |
-| `tests/` | un dossier de tests par module, plus les tests d'intégration | tous |
+| Dossier | Rôle |
+| --- | --- |
+| `sensai/core/` | pipeline, client HTTP Ollama, configuration, contrats |
+| `sensai/app/` | assemblage commun à la CLI et au web, consultations, choix des outils proposés |
+| `sensai/cli.py`, `sensai/web/` | CLI ; API FastAPI et page web (streaming SSE, validation) |
+| `sensai/obs/` | logs JSONL, métriques, mesure avec ou sans contexte |
+| `sensai/memory/` | patients, sessions et profils SQLite ; contexte injecté au modèle |
+| `sensai/rag/` | ingestion des documents publics, embeddings, index, recherche |
+| `sensai/tools/` | outils patients, serveur et client MCP, serveurs tiers |
+| `sensai/guardrails/` | coffre de pseudonymes, filtres d'entrée et de sortie |
+| `tests/` | un dossier de tests par module, plus les tests d'intégration |
 
 ### Un tour, étape par étape
 
