@@ -114,7 +114,7 @@ Tout se règle dans `config.toml`, sans toucher au code.
 ## Vérifier
 
 ```bash
-python -m pytest -q             # tests automatiques, sans vrai modèle : 348 passed (03/11)
+python -m pytest -q             # tests automatiques, sans vrai modèle : 356 passed (03/11)
 python -m sensai.obs            # métriques calculées sur logs/
 python -m sensai.obs.compare    # mesure avec / sans contexte, avec le vrai modèle (≈ 15 min sur CPU)
 ```

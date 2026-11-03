@@ -2,9 +2,14 @@
 
 La validation du médecin doit être effectuée par le pipeline avant une écriture
 déclenchée par un outil. Cette couche de stockage ne demande aucune confirmation.
+
+Création et suppression par le médecin, hors de l'agent : python -m sensai.memory.patients --help.
 """
+import argparse
+from datetime import datetime
 import json
 from pathlib import Path
+import sqlite3
 import uuid
 
 from sensai.memory.database import SQLiteDatabase
@@ -167,3 +172,116 @@ class PatientStore(SQLiteDatabase):
             result = db.execute("DELETE FROM patients WHERE patient_id = ?", (patient_id,))
             if result.rowcount == 0:
                 raise PatientNotFoundError(patient_id)
+
+
+# Commande du médecin. Les données sont demandées une à une, jamais passées en arguments :
+# elles ne restent ni dans l'historique du shell ni dans la liste des processus.
+LIST_LABELS = (("allergies", "Allergies"), ("treatments", "Traitements"),
+               ("medical_history", "Antécédents"), ("notes", "Notes"))
+
+
+def _confirm(ask, question: str) -> bool:
+    return ask(f"{question} [o/N] ").strip().casefold() in {"o", "oui"}
+
+
+def _ask_date(ask) -> str:
+    while True:
+        text = ask("Date de naissance (AAAA-MM-JJ ou JJ/MM/AAAA, vide si inconnue) : ").strip()
+        if not text:
+            return ""
+        for layout in ("%Y-%m-%d", "%d/%m/%Y"):
+            try:
+                return datetime.strptime(text, layout).date().isoformat()
+            except ValueError:
+                pass
+        print("Date invalide.")
+
+
+def homonym_warnings(store: PatientStore, name: str) -> list[str]:
+    """Un nom de famille partagé n'est plus pseudonymisé seul (coffre PII) ; un nom identique
+    oblige à sélectionner le dossier par son identifiant."""
+    surname = name.split()[-1]
+    same = [patient for patient in store.list_patients()
+            if patient["name"].split()[-1].casefold() == surname.casefold()]
+    warnings = []
+    if same:
+        warnings.append(f"⚠ Un autre dossier porte le nom de famille « {surname} » : « {surname} » seul ne "
+                        "sera plus pseudonymisé, ni pour ce patient ni pour l'autre. Écrivez le nom complet "
+                        "ou une civilité (« M. … », « Mme … »).")
+    if any(" ".join(patient["name"].split()).casefold() == " ".join(name.split()).casefold() for patient in same):
+        warnings.append("⚠ Un dossier porte déjà exactement ce nom : il faudra le sélectionner par son identifiant.")
+    return warnings
+
+
+def _add(store: PatientStore, ask) -> None:
+    print("Les réponses sont saisies ici, pas en arguments : elles ne restent pas dans l'historique du terminal.")
+    name = ""
+    while not name:
+        name = " ".join(ask("Nom complet : ").split())
+    fields = {"name": name, "birth_date": _ask_date(ask)}
+    for field, label in LIST_LABELS:
+        answer = ask(f"{label} (séparer par « ; », Entrée si rien) : ")
+        fields[field] = [item.strip() for item in answer.split(";") if item.strip()]
+    print(json.dumps(fields, ensure_ascii=False, indent=2))
+    for warning in homonym_warnings(store, name):
+        print(warning)
+    if not _confirm(ask, "Créer ce dossier ?"):
+        print("Création annulée : aucun dossier créé.")
+        return
+    patient = store.create_patient(**fields)
+    print(f"Dossier créé : {patient['patient_id']}. Le nom et la date de naissance seront "
+          "pseudonymisés dès la prochaine question à l'assistant.")
+
+
+def _delete(store: PatientStore, sessions, ask) -> None:
+    reference = ask("Nom complet ou identifiant du patient à supprimer : ").strip()
+    try:
+        patient = store.resolve_patient(reference)
+    except AmbiguousPatientError:
+        raise LookupError("plusieurs dossiers portent ce nom ; utilisez l'identifiant "
+                          "(python -m sensai.memory.patients list).") from None
+    except PatientNotFoundError:
+        raise LookupError(f"aucun dossier ne correspond à « {reference} ».") from None
+    linked, others = sessions.forget_patient(patient, apply=False)
+    print(f"Dossier : {patient['name']} ({patient['patient_id']})")
+    print(f"Conversations liées à ce dossier, supprimées aussi : {len(linked)}")
+    if others:
+        print(f"Autres conversations dont le coffre de pseudonymes connaît ce patient : {len(others)} ; "
+              "son nom et sa date de naissance en seront retirés.")
+    print("Les logs (logs/), déjà pseudonymisés, ne sont pas modifiés.")
+    if not _confirm(ask, "Supprimer définitivement ?"):
+        print("Suppression annulée : rien n'a été modifié.")
+        return
+    sessions.forget_patient(patient)
+    store.delete_patient(patient["patient_id"])
+    print(f"Dossier supprimé, avec {len(linked)} conversation(s).")
+
+
+def main(argv=None, ask=input) -> None:
+    from sensai.memory.sessions import SQLiteSessionStore
+
+    parser = argparse.ArgumentParser(description="Dossiers patients locaux : lister, créer, supprimer. "
+                                     "Aucun appel au modèle.")
+    parser.add_argument("--db", type=Path, default=Path(".sensai/memory.sqlite3"))
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("list", help="identifiant, nom et date de naissance de chaque dossier")
+    commands.add_parser("add", help="créer un dossier (questions posées une à une)")
+    commands.add_parser("delete", help="supprimer un dossier et ses conversations")
+    args = parser.parse_args(argv)
+    try:
+        store = PatientStore(args.db)
+        if args.command == "list":
+            for patient in store.list_patients():
+                print(f"{patient['patient_id']}  {patient['name']}  {patient['birth_date'] or '—'}")
+        elif args.command == "add":
+            _add(store, ask)
+        else:
+            _delete(store, SQLiteSessionStore(args.db), ask)
+    except (KeyboardInterrupt, EOFError):
+        parser.exit(1, "\nAnnulé : rien n'a été modifié.\n")
+    except (OSError, ValueError, LookupError, sqlite3.Error) as error:
+        parser.exit(1, f"Patient : {error}\n")
+
+
+if __name__ == "__main__":
+    main()

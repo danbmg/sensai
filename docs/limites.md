@@ -49,6 +49,21 @@ La détection combine les patients connus de la base et des expressions réguli�
 - une date sans « né(e) le », une adresse sans numéro, un téléphone étranger ;
 - les informations indirectes : profession, lieu de travail, maladie rare.
 
+**Patients créés ou supprimés** (`python -m sensai.memory.patients`) :
+
+- un nom de famille porté par **deux dossiers** n'est plus pseudonymisé seul : « Dupont
+  est-elle allergique ? » le laisse en clair. La commande le signale à la création ; il faut
+  alors écrire le nom complet ou une civilité ;
+- le **prénom seul** (« Jeanne ») n'est jamais masqué ;
+- un nom de famille qui est aussi un **mot courant** (« Petit ») est masqué partout, y compris
+  dans « un petit bouton » : ce n'est pas une fuite, mais la réponse devient moins lisible ;
+- après une **suppression**, les logs (`logs/`) restent : ils ne contiennent ni le nom ni la
+  date de naissance, mais gardent des données cliniques sous `[PATIENT_n]`. Ils se suppriment
+  à la main, un fichier par jour. Les sauvegardes éventuelles de la base ne sont pas touchées ;
+- une consultation **ouverte** sur le patient supprimé ne peut plus répondre (« Tour
+  interrompu ») : la fermer avant ;
+- `--demo` recrée les trois patients fictifs s'ils ont été supprimés.
+
 La table des pseudonymes (`pii_map`) et la base patients sont stockées en local **sans
 chiffrement**.
 

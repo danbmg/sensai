@@ -29,8 +29,8 @@ aussi deux rôles qui interviennent avant ou après :
 
 | Rôle dans les user stories | Qui, au cabinet | Ce qu'il fait avec Sensai | Étape |
 |---|---|---|---|
-| « médecin » | le Dr Martin, en consultation | pose ses questions, valide ou refuse les écritures | S0 à S4 |
-| « responsable du cabinet » | le Dr Martin lui-même : en libéral, il est titulaire de son cabinet | relit le journal et la latence, après les consultations | S5 |
+| « médecin » | le Dr Martin | crée le dossier d'un nouveau patient avant sa première consultation ; pose ses questions, valide ou refuse les écritures | P, S0 à S4 |
+| « responsable du cabinet » | le Dr Martin lui-même : en libéral, il est titulaire de son cabinet | relit le journal et la latence, après les consultations ; supprime un dossier quand un patient demande l'effacement de ses données | P, S5 |
 | « responsable informatique du cabinet » | le prestataire informatique qui installe et entretient le PC du cabinet | installe Sensai, choisit le modèle adapté au PC, déclare les outils et les règles de filtrage dans `config.toml` | P |
 
 ## Le scénario (fil rouge de la démo)
@@ -40,7 +40,7 @@ Le Dr Martin reçoit Mme Dupont et envisage de lui prescrire de l'amoxicilline. 
 
 | Étape | Ce qui se passe | Fonctionnalités |
 |---|---|---|
-| P | Avant la première consultation, le prestataire installe Sensai sur le PC du cabinet et règle `config.toml` : modèle adapté à la machine, serveurs MCP, règles de filtrage. Aucun code n'est modifié. | B1, T1, EV2 |
+| P | Avant la première consultation, le prestataire installe Sensai sur le PC du cabinet et règle `config.toml` : modèle adapté à la machine, serveurs MCP, règles de filtrage. Aucun code n'est modifié. Le Dr Martin crée le dossier d'un nouveau patient, ou supprime celui d'un patient qui le demande, par une commande qui n'appelle pas le modèle. | B1, T1, EV2, M3 |
 | S0 | Le médecin ouvre la consultation de Mme Dupont (CLI ou web) et tape sa question. La réponse s'affiche au fil de l'eau. | B1, X1, M1 |
 | S1 | La question passe les filtres d'entrée (une tentative de détournement serait refusée ici), puis « Mme Dupont » devient `[PATIENT_1]` avant l'envoi au modèle. À l'écran, le médecin lit le vrai nom. | EV2, X1 |
 | S2 | L'assistant retrouve dans le dossier SQLite l'**allergie à la pénicilline** (urticaire et œdème de Quincke en 2019). | M3 |
@@ -102,4 +102,5 @@ Ce scénario n'a pas changé depuis le début du projet :
 - **28 octobre** : mesure avec / sans contexte, toujours sur la même question
   ([Mesures](mesures.md)).
 - **3 novembre** : la préparation du poste (P) et les rôles autour du médecin sont écrits
-  explicitement, pour rattacher chaque user story à une étape ; le fil rouge S0 à S5 ne change pas.
+  explicitement, pour rattacher chaque user story à une étape ; la création et la suppression d'un
+  dossier y sont rattachées. Le fil rouge S0 à S5 ne change pas.

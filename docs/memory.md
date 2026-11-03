@@ -36,6 +36,23 @@ Relancer la démo sur la même base préserve les patients existants et ajoute u
 nouvelle note de démonstration ; elle remplace la session réservée `demo-session`.
 Utiliser un fichier dédié à la démo, hors du dépôt.
 
+## Créer ou supprimer un dossier
+
+`python -m sensai.memory.patients {list,add,delete}` (exemples dans
+[Fonctionnalités](fonctionnalites.md#creer-ou-supprimer-un-dossier)) :
+
+- `add` appelle `PatientStore.create_patient` après confirmation. Le coffre de pseudonymes
+  étant reconstruit à chaque tour depuis `list_patients()`, le nouveau patient est masqué dès
+  la question suivante, même dans une consultation déjà ouverte ;
+- `delete` appelle `SQLiteSessionStore.forget_patient(patient)`, puis
+  `PatientStore.delete_patient`. `forget_patient` supprime les sessions dont les métadonnées
+  désignent ce patient, et retire du coffre (`pii_map`) des autres sessions les valeurs qui
+  l'identifient : nom complet, « civilité + nom », date de naissance aux deux formats.
+  L'historique, déjà pseudonymisé, n'est pas réécrit ; `forget_patient(patient, apply=False)`
+  compte les traces sans rien modifier.
+
+Tests : `tests/memory/test_patient_command.py`.
+
 ## API utilisée par les outils patients
 
 ```python

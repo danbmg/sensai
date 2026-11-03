@@ -10,7 +10,7 @@ la consultation), et où la vérifier.
 |---|---|---|---|---|
 | **B1** CLI | Voir la réponse s'écrire · Garder le fil · Comprendre une panne · Changer de modèle | P, S0 | `sensai/cli.py`, `sensai/core/ollama_client.py`, `sensai/core/config.py` | `tests/core/test_cli.py`, `test_ollama_client.py`, `test_config.py` |
 | **M1** sessions et profils | Reprendre une session · Profil médecin · Conversations séparées · Choisir un profil | S0 | `sensai/memory/sessions.py`, `profiles.py` | `tests/memory/test_profiles.py`, `test_storage.py` |
-| **M3** dossiers SQLite | Consulter un dossier · Mettre à jour un dossier | S2, S4 | `sensai/memory/patients.py`, `context.py` | `tests/memory/test_storage.py`, `tests/tools/test_patient_tools.py` |
+| **M3** dossiers SQLite | Consulter un dossier · Mettre à jour un dossier · Créer un dossier · Supprimer un dossier | P, S2, S4 | `sensai/memory/patients.py` (dont la commande `patients`), `sessions.py` (`forget_patient`), `context.py` | `tests/memory/test_storage.py`, `test_patient_command.py`, `tests/tools/test_patient_tools.py` |
 | **T1** outils et MCP | Consulter par un outil · Serveur MCP · Brancher un serveur existant | P, S4 | `sensai/tools/` | `tests/tools/test_patient_tools.py`, `test_third_party_mcp.py`, `tests/test_integration.py` (vrai serveur MCP) |
 | **R1** RAG | Rechercher dans les notices · Identifier les sources | S3 | `sensai/rag/documents.py`, `embeddings.py`, `store.py`, `retrieval.py` | `tests/rag/` |
 | **R2** RAG avancé | Limiter les documents · Écarter les extraits peu pertinents | S3 | `sensai/rag/retrieval.py`, `routing.py` | `tests/rag/test_retrieval.py`, `test_context.py` |
@@ -24,7 +24,7 @@ couverte par au moins une fonctionnalité livrée.
 
 ## User story → étape → vérification
 
-Les 27 user stories, chacune avec son rôle ([rôles](scenario.md#les-roles-autour-du-medecin)),
+Les 29 user stories, chacune avec son rôle ([rôles](scenario.md#les-roles-autour-du-medecin)),
 son étape du scénario et les tests qui vérifient ses critères d'acceptation.
 
 | Fonctionnalité | User story | Rôle | Étape | Tests |
@@ -46,6 +46,8 @@ son étape du scénario et les tests qui vérifient ses critères d'acceptation.
 | M1 | Choisir un profil médecin | médecin | S0 | `test_profiles.py` : `test_default_profile_preserves_preferences_and_unknown_profile_is_explicit`, `test_profile_management_command` |
 | M3 | Consulter un dossier | médecin | S2 | `test_storage.py` : `test_crud_survives_reopening`, `test_homonyms_require_id_and_partial_name_cannot_modify_record`, `test_exact_name_resolves_to_id` ; `test_integration.py` : `test_context_reads_current_patient_without_exposing_others` |
 | M3 | Mettre à jour un dossier | médecin | S4 | `test_storage.py` : `test_concurrent_note_additions_are_preserved`, `test_validation_rejects_invalid_updates_without_modifying_record` ; `test_runtime.py` : `test_model_updates_record_after_doctor_approval` |
+| M3 | Créer un dossier avant la consultation | médecin | P | `test_patient_command.py` : `test_add_asks_one_field_at_a_time_and_creates_the_record`, `test_patient_data_cannot_be_passed_as_arguments`, `test_homonyms_are_announced_before_creation`, `test_refusal_or_interruption_creates_nothing`, `test_new_patient_never_reaches_the_model_in_clear` |
+| M3 | Supprimer un dossier et ses traces | responsable du cabinet | P | `test_patient_command.py` : `test_delete_removes_record_conversations_and_identity_everywhere`, `test_delete_refused_unknown_or_ambiguous_changes_nothing` |
 | R1 | Rechercher dans les notices | médecin | S3 | `test_documents.py` : `test_chunk_boundaries_overlap_and_page_references` ; `test_embeddings.py` : `test_direct_embed_api_batching_prefixes_and_cpu_limits` ; `test_context.py` : `test_pipeline_injects_profile_and_sources_but_embeds_only_masked_question` |
 | R1 | Identifier les sources | médecin | S3 | `test_retrieval.py` : `test_context_budget_and_source_references_are_consistent` ; `test_context.py` : `test_no_results_or_embedding_failure_clears_sources_without_losing_patient` ; `test_cli.py` : `test_document_commands_and_source_persistence` |
 | R2 | Limiter les documents recherchés | médecin | S3 | `test_retrieval.py` : `test_metadata_filters_apply_before_embedding_and_ranking`, `test_empty_index_does_not_call_embedding_server` |
@@ -61,7 +63,7 @@ Chaque étape du scénario est servie par au moins une user story :
 
 | Étape | User stories |
 |---|---|
-| P — préparation du poste | 4 (B1, T1 ×2, EV2) |
+| P — préparation du poste et des dossiers | 6 (B1, T1 ×2, EV2, M3 ×2) |
 | S0 — ouvrir la consultation, poser la question | 9 (B1 ×3, X1 ×2, M1 ×4) |
 | S1 — filtres et pseudonymisation | 3 (X1, EV2 ×2) |
 | S2 — le dossier | 1 (M3) |
@@ -69,11 +71,11 @@ Chaque étape du scénario est servie par au moins une user story :
 | S4 — la note validée | 5 (A3 ×2, M3, T1 ×2) |
 | S5 — journal et latence | 2 (EV3 ×2) |
 
-T1 « Isoler les outils patients dans un serveur MCP » compte pour P et pour S4 : 28 rattachements
-pour 27 user stories.
+T1 « Isoler les outils patients dans un serveur MCP » compte pour P et pour S4 : 30 rattachements
+pour 29 user stories.
 
 Toutes les vérifications automatiques se relancent avec `python -m pytest -q`
-(348 tests, verts au 03/11, sans vrai modèle). Les vérifications avec le vrai modèle sont
+(356 tests, verts au 03/11, sans vrai modèle). Les vérifications avec le vrai modèle sont
 consignées dans [Vérification de la démo](demo_verified.md) et [Mesures](mesures.md).
 
 ## Fonctionnalités abandonnées ou modifiées
@@ -82,7 +84,7 @@ consignées dans [Vérification de la démo](demo_verified.md) et [Mesures](mesu
 |---|---|---|---|---|
 | **EV1** évaluation par LLM-juge (issue #29) | prévue (Matteo) | **non livrée** | non commencée au 28/10 ; un juge LLM ajouterait un second appel de modèle par tour, sur une latence déjà de 20 à 60 s sur CPU | aucune écrite ; le besoin est décrit dans l'issue #29 |
 | **T5** sortie JSON imposée (issue #28) | prévue | **non livrée** | non commencée au 28/10 ; le besoin est en partie couvert : arguments d'outils validés par leur schéma JSON, note qui recopie un schéma refusée (`_text` dans `tools/patient_tools.py`) | aucune écrite ; le besoin est décrit dans l'issue #28 |
-| Filtre « hors périmètre médical » et création / suppression de patient par la conversation | ajoutés le 03/11 | **retirés le jour même** (commit `f3d8371`) | le filtre refusait toute question sans mot médical : « Je m'appelle Paul. », la calculatrice, les questions d'heure pour le serveur MCP `time` ; les deux nouveaux outils arrivaient sans user story ni traçabilité | B1 « Garder le fil de la consultation », T1 « Laisser l'assistant consulter le dossier par un outil », T1 « Brancher un serveur MCP existant » |
+| Filtre « hors périmètre médical » et création / suppression de patient par la conversation | ajoutés le 03/11 | **retirés le jour même** (commit `f3d8371`) ; création et suppression **reprises par une commande hors de l'agent** (`python -m sensai.memory.patients`) | le filtre refusait toute question sans mot médical : « Je m'appelle Paul. », la calculatrice, les questions d'heure pour le serveur MCP `time` ; les deux nouveaux outils arrivaient sans user story ni traçabilité ; par la conversation, le nom d'un nouveau patient, pas encore en base, partait en clair au modèle ([Choix](choix.md#creer-un-dossier-par-une-commande-pas-par-lagent)) | B1 « Garder le fil de la consultation », T1 « Laisser l'assistant consulter le dossier par un outil », T1 « Brancher un serveur MCP existant », M3 « Créer un dossier avant la consultation », M3 « Supprimer un dossier et ses traces » |
 | Budget d'un tour en 30 s | critère de choix du modèle (bench du 05/10) | **abandonné** : 20 à 60 s mesurés selon le contexte | aucun modèle fiable ne le tient sur un CPU portable ; le scénario vise des vérifications ponctuelles, pas une conversation rapide ([Scénario](scenario.md#le-scenario-est-il-realiste-avec-un-modele-local)) | B1 « Voir la réponse s'écrire » |
 | Contrat d'interfaces v1 | `GuardResult.mapping` sans état | **remplacé** par la v2 : un `PIIVault` par session, frontière unique dans le pipeline | la v1 ne permettait ni la recherche patient en clair, ni la ré-identification des arguments d'outils, ni des pseudonymes stables d'un tour à l'autre | EV2 « Ne jamais envoyer l'identité » |
 | Règles des garde-fous écrites dans le code | EV2 | **rendues réglables** dans `[guardrails]` (28/10) | un contournement trouvé en test (« Oublie ce qu'on t'a dit… ») doit pouvoir se bloquer sans changer le code : c'est désormais une règle de configuration | EV2 « Adapter les règles au cabinet » |
@@ -102,3 +104,4 @@ consignées dans [Vérification de la démo](demo_verified.md) et [Mesures](mesu
 | 23/10 | `7962388` | M1 ×2, R2 ×2 ; statuts « livré » mis à jour |
 | 28/10 | branche `feat/docs-mkdocs` | B1, X1, A3, EV3, T1, EV2, rédigées après leur code ; T1 « Brancher un serveur MCP existant » et EV2 « Adapter les règles au cabinet », rédigées avec leur code |
 | 03/11 | — | étape du scénario ajoutée à chaque story ; rôles et préparation du poste (P) explicités dans le [scénario](scenario.md#les-roles-autour-du-medecin) |
+| 03/11 | — | M3 « Créer un dossier avant la consultation » et « Supprimer un dossier et ses traces », rédigées le même jour que la commande |

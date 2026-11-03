@@ -42,7 +42,7 @@ sans citer de notice.
 ### Vérifier l'installation
 
 ```bash
-python -m pytest -q                 # 348 passed, sans Ollama (faux serveur)
+python -m pytest -q                 # 356 passed, sans Ollama (faux serveur)
 python -m sensai.rag search "Précautions avec l'amoxicilline en cas d'allergie à la pénicilline ?"
 ```
 
@@ -80,7 +80,7 @@ Chaque fonctionnalité, avec un exemple à essayer après `python -m sensai --de
 | --- | --- | --- |
 | B1 | CLI : réponse en streaming, historique, erreurs claires, Ctrl+C, modèle configurable | « Mme Dupont peut-elle prendre de l'amoxicilline ? » ; `python -m sensai --model llama3.2:3b` ; Ollama éteint : le message indique `ollama serve` |
 | M1 | Sessions persistantes et profils médecins | `python -m sensai --demo --session consultation`, quitter, relancer : l'historique est repris ; `python -m sensai --list-sessions` ; `--profile generaliste` (voir plus bas) |
-| M3 | Dossiers patients SQLite, lus et mis à jour par l'agent | `/dossier` ; « Quelles allergies sont enregistrées pour Mme Dupont ? » ; « Ajoute l'allergie à l'aspirine au dossier. » |
+| M3 | Dossiers patients SQLite, lus et mis à jour par l'agent ; créés et supprimés par une commande, hors de l'agent | `/dossier` ; « Quelles allergies sont enregistrées pour Mme Dupont ? » ; « Ajoute l'allergie à l'aspirine au dossier. » ; `python -m sensai.memory.patients add` |
 | T1 | Outils patients, en local ou via notre serveur MCP ; serveurs MCP tiers déclarés dans `config.toml` | `/tools` ; « Quelle heure est-il dans le fuseau Asia/Tokyo ? » (serveur `time`, s'il est installé) |
 | R1 | Recherche dans les notices ANSM et fiches HAS, extraits cités | `python -m sensai.rag search "…"` ; après une question sur un médicament, `/sources` |
 | R2 | Filtres par métadonnées, reclassement BM25, seuils de pertinence | `/rag-filter {"publisher":"HAS","tags":["antibiotiques"]}` puis `/rag-filter all` ; `[rag] rerank = false` pour comparer |
@@ -137,6 +137,20 @@ Mêmes options que la CLI, plus `--port`. La page affiche la réponse en streami
 compteur de tokens, les sources, les appels d'outils, le prompt exact envoyé au modèle, et
 ouvre une fenêtre de validation avant toute écriture dans un dossier. Le serveur n'écoute
 que sur `127.0.0.1` et n'a pas d'authentification.
+
+## Créer ou supprimer un dossier patient
+
+```bash
+python -m sensai.memory.patients add       # questions posées une à une, puis confirmation
+python -m sensai.memory.patients delete    # supprime aussi les conversations du patient
+python -m sensai.memory.patients list
+```
+
+Aucun appel au modèle. Les données sont demandées une à une, jamais passées en arguments :
+elles ne restent pas dans l'historique du terminal. Le nouveau patient est pseudonymisé dès
+la question suivante à l'assistant. Une commande plutôt qu'un outil de l'agent, parce qu'un
+patient pas encore en base n'est pas reconnu par la pseudonymisation : voir
+[docs/choix.md](docs/choix.md) et [docs/fonctionnalites.md](docs/fonctionnalites.md).
 
 ## Profil médecin et documents publics
 

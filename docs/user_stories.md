@@ -225,6 +225,30 @@ Critères d'acceptation :
 - Modifier un champ conserve les autres champs ; un patient absent ou ambigu provoque une erreur explicite.
 - Une écriture demandée par le modèle n'est exécutée qu'après confirmation du médecin via le pipeline.
 
+### M3 — Créer un dossier avant la consultation (livré avec la commande `patients add`)
+
+Scénario : [**P**](scenario.md#le-scenario-fil-rouge-de-la-demo) — le dossier d'un nouveau patient existe avant sa première consultation.
+
+En tant que médecin, je souhaite créer le dossier d'un nouveau patient sans passer par l'assistant, afin que son identité soit pseudonymisée dès la première question que je pose à son sujet.
+
+Critères d'acceptation :
+
+- `python -m sensai.memory.patients add` pose les questions une à une ; aucune donnée du patient ne se passe en argument, donc aucune ne reste dans l'historique du terminal.
+- Un nom de famille déjà présent dans la base est signalé avant la création, avec ses conséquences sur la pseudonymisation ; refuser ne crée rien.
+- Après la création, le nom et la date de naissance n'apparaissent dans aucun message envoyé au modèle, ni dans les logs, même dans une consultation déjà ouverte.
+
+### M3 — Supprimer un dossier et ses traces (livré avec la commande `patients delete`)
+
+Scénario : [**P**](scenario.md#le-scenario-fil-rouge-de-la-demo) — un patient demande l'effacement de ses données.
+
+En tant que responsable du cabinet, je souhaite supprimer le dossier d'un patient avec ses conversations, afin de répondre à une demande d'effacement sans laisser son identité dans la base.
+
+Critères d'acceptation :
+
+- Avant la suppression, la commande affiche le dossier et le nombre de conversations concernées, puis demande confirmation ; refuser ne modifie rien.
+- Les conversations liées au dossier sont supprimées ; le nom et la date de naissance du patient sont retirés du coffre de pseudonymes des autres conversations.
+- Un nom inconnu ou porté par plusieurs dossiers produit une erreur explicite, sans rien supprimer.
+
 ### R1 — Rechercher dans les notices (livré avec ingestion et recherche locale)
 
 Scénario : [**S3**](scenario.md#le-scenario-fil-rouge-de-la-demo) — retrouver l'extrait de la notice ANSM de l'amoxicilline.

@@ -85,6 +85,23 @@ Mesuré par `bench_models.py` le 05/10, sur le même scénario ([détail](bench.
 - **Pourquoi** : une consigne au modèle peut être ignorée ; un contrôle dans le code, non.
 - **Impact** : vérifié en réel (refus → dossier inchangé, accord → note écrite).
 
+## Créer un dossier par une commande, pas par l'agent
+
+- **Choix** : `python -m sensai.memory.patients add` et `delete`, hors de l'assistant, sans
+  appel au modèle ; les données sont demandées une à une, jamais passées en arguments.
+- **Écarté** : un outil `create_patient` appelé par l'agent (essayé le 03/11, retiré le jour
+  même) ; une commande à arguments, sur le modèle de `profiles set`.
+- **Pourquoi** : le coffre de pseudonymes ne reconnaît que les patients déjà en base. Dans
+  « Ajoute un patient nommé Jean Lefort », le nom, encore inconnu et sans civilité, partait
+  **en clair** au modèle. Créé par la commande, le patient est en base avant la première
+  question : son nom est masqué dès le tour suivant. Des arguments, eux, resteraient dans
+  l'historique du terminal (`~/.bash_history`).
+- **Impact** : testé par `test_new_patient_never_reaches_the_model_in_clear` (ni le nom ni la
+  date de naissance dans les messages envoyés ni dans les logs, même dans une consultation déjà
+  ouverte). Le test échoue si le coffre ignore le nouveau patient : vérifié le 03/11 en le
+  désactivant volontairement. La suppression retire aussi les conversations du patient et son
+  identité du coffre des autres conversations.
+
 ## Serveurs MCP tiers : un processus et un environnement chacun
 
 - **Choix** : chaque serveur tiers est décrit dans `[[mcp.servers]]` (commande, arguments,

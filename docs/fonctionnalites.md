@@ -57,6 +57,43 @@ des outils (T1), toujours après validation (A3).
 ❌ Une liste d'allergies vide n'est pas présentée comme une absence d'allergie
 (consigne dans le contexte). Détails : [Mémoire](memory.md).
 
+### Créer ou supprimer un dossier
+
+Hors de l'assistant, sans appel au modèle. Les données sont demandées une à une : rien ne
+passe en argument, donc rien ne reste dans l'historique du terminal.
+
+```text
+$ python -m sensai.memory.patients add
+Nom complet : Jean Lefort
+Date de naissance (AAAA-MM-JJ ou JJ/MM/AAAA, vide si inconnue) : 12/03/1980
+Allergies (séparer par « ; », Entrée si rien) : Aspirine : bronchospasme
+Traitements (séparer par « ; », Entrée si rien) :
+Antécédents (séparer par « ; », Entrée si rien) : Diabète de type 2
+Notes (séparer par « ; », Entrée si rien) :
+{ … récapitulatif du dossier … }
+Créer ce dossier ? [o/N] o
+Dossier créé : 6f5eea0d…. Le nom et la date de naissance seront pseudonymisés dès la prochaine question à l'assistant.
+```
+
+Si un autre dossier porte le même nom de famille, la commande prévient avant la création :
+« Martin » seul ne sera plus pseudonymisé, il faudra écrire le nom complet ou une civilité.
+
+```text
+$ python -m sensai.memory.patients delete
+Nom complet ou identifiant du patient à supprimer : Jean Lefort
+Dossier : Jean Lefort (6f5eea0d…)
+Conversations liées à ce dossier, supprimées aussi : 2
+Autres conversations dont le coffre de pseudonymes connaît ce patient : 1 ; son nom et sa date de naissance en seront retirés.
+Les logs (logs/), déjà pseudonymisés, ne sont pas modifiés.
+Supprimer définitivement ? [o/N] o
+Dossier supprimé, avec 2 conversation(s).
+```
+
+`python -m sensai.memory.patients list` affiche l'identifiant, le nom et la date de naissance
+de chaque dossier ; `--db` choisit la base. Pourquoi une commande plutôt qu'un outil de
+l'agent : [Choix et alternatives](choix.md#creer-un-dossier-par-une-commande-pas-par-lagent).
+Ce qui reste après une suppression : [Limites](limites.md#pseudonymisation).
+
 ## T1 — Outils et MCP
 
 Le modèle décide d'appeler un outil (`message.tool_calls`), le pipeline l'exécute et lui
