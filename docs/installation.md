@@ -2,8 +2,12 @@
 
 ## Prérequis
 
-- **Python 3.10 ou plus récent** (testé en 3.14).
-- **[Ollama](https://ollama.com)** installé et lancé (`ollama serve` s'il ne tourne pas déjà).
+- **Python 3.10 ou plus récent** (testé en 3.12 et 3.14), avec le module `venv`. Sous
+  Debian/Ubuntu, il est dans un paquet séparé : si `python3 -c "import ensurepip"` échoue,
+  `sudo apt install python3-venv`.
+- **[Ollama](https://ollama.com)** installé et lancé. Sous Linux :
+  `curl -fsSL https://ollama.com/install.sh | sh` ; sinon [ollama.com/download](https://ollama.com/download).
+  `ollama list` doit répondre ; sinon lancer `ollama serve` dans un autre terminal.
 - Environ **2,2 Go** de disque pour les deux modèles : `qwen2.5:3b` (1,9 Go) et
   `nomic-embed-text` (274 Mo). Aucune carte graphique n'est nécessaire.
 
@@ -110,7 +114,7 @@ Tout se règle dans `config.toml`, sans toucher au code.
 ## Vérifier
 
 ```bash
-python -m pytest -q             # tests automatiques, sans vrai modèle (faux serveur Ollama)
+python -m pytest -q             # tests automatiques, sans vrai modèle : 348 passed (03/11)
 python -m sensai.obs            # métriques calculées sur logs/
 python -m sensai.obs.compare    # mesure avec / sans contexte, avec le vrai modèle (≈ 15 min sur CPU)
 ```

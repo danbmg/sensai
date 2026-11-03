@@ -22,17 +22,30 @@ Le Dr Martin n'est pas informaticien : l'assistant se lance comme un logiciel du
 > Avant de prescrire, vérifier en une question qu'un médicament ne pose pas de problème
 > **pour ce patient-là**, avec la source, et garder une trace dans le dossier.
 
+## Les rôles autour du médecin
+
+Pendant la consultation, le Dr Martin est le seul utilisateur. Les user stories nomment
+aussi deux rôles qui interviennent avant ou après :
+
+| Rôle dans les user stories | Qui, au cabinet | Ce qu'il fait avec Sensai | Étape |
+|---|---|---|---|
+| « médecin » | le Dr Martin, en consultation | pose ses questions, valide ou refuse les écritures | S0 à S4 |
+| « responsable du cabinet » | le Dr Martin lui-même : en libéral, il est titulaire de son cabinet | relit le journal et la latence, après les consultations | S5 |
+| « responsable informatique du cabinet » | le prestataire informatique qui installe et entretient le PC du cabinet | installe Sensai, choisit le modèle adapté au PC, déclare les outils et les règles de filtrage dans `config.toml` | P |
+
 ## Le scénario (fil rouge de la démo)
 
-Le Dr Martin reçoit Mme Dupont et envisage de lui prescrire de l'amoxicilline.
+Le Dr Martin reçoit Mme Dupont et envisage de lui prescrire de l'amoxicilline. Le poste a
+été préparé une fois, en amont (P).
 
 | Étape | Ce qui se passe | Fonctionnalités |
 |---|---|---|
+| P | Avant la première consultation, le prestataire installe Sensai sur le PC du cabinet et règle `config.toml` : modèle adapté à la machine, serveurs MCP, règles de filtrage. Aucun code n'est modifié. | B1, T1, EV2 |
 | S0 | Le médecin ouvre la consultation de Mme Dupont (CLI ou web) et tape sa question. La réponse s'affiche au fil de l'eau. | B1, X1, M1 |
-| S1 | « Mme Dupont » devient `[PATIENT_1]` avant l'envoi au modèle. À l'écran, le médecin lit le vrai nom. | EV2 |
+| S1 | La question passe les filtres d'entrée (une tentative de détournement serait refusée ici), puis « Mme Dupont » devient `[PATIENT_1]` avant l'envoi au modèle. À l'écran, le médecin lit le vrai nom. | EV2, X1 |
 | S2 | L'assistant retrouve dans le dossier SQLite l'**allergie à la pénicilline** (urticaire et œdème de Quincke en 2019). | M3 |
 | S3 | Il cite l'extrait de la **notice ANSM** de l'amoxicilline, qui est une pénicilline. | R1, R2 |
-| S4 | Il propose d'ajouter une note au dossier. Une fenêtre montre l'outil et ses arguments **en clair**. Le médecin valide ou refuse. | T1, A3 |
+| S4 | Il propose d'ajouter une note au dossier. Une fenêtre montre l'outil et ses arguments **en clair**. Le médecin valide ou refuse. | T1, A3, M3 |
 | S5 | Chaque tour est journalisé (pseudonymisé) ; le tableau de bord montre la latence. | EV3 |
 
 ## Le scénario est-il réaliste avec un modèle local ?
@@ -76,6 +89,7 @@ elle-même.
 | Plusieurs patients par jour, sans mélanger | une session par consultation, liée à un patient (M1) |
 | Pas informaticien | interface web (X1), messages d'erreur sans trace technique (B1) |
 | Un PC lent | réglages de contexte, tableau de latence (EV3) |
+| Un prestataire informatique, pas un développeur | modèle, serveurs MCP et règles de filtrage réglables dans `config.toml` (B1, T1, EV2) |
 
 ## Un scénario fixé dès le départ
 
@@ -87,3 +101,5 @@ Ce scénario n'a pas changé depuis le début du projet :
 - **14 octobre** : démo du même cas, rejouée avec le vrai modèle ([Vérification de la démo](demo_verified.md)).
 - **28 octobre** : mesure avec / sans contexte, toujours sur la même question
   ([Mesures](mesures.md)).
+- **3 novembre** : la préparation du poste (P) et les rôles autour du médecin sont écrits
+  explicitement, pour rattacher chaque user story à une étape ; le fil rouge S0 à S5 ne change pas.

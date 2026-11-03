@@ -50,7 +50,8 @@ nav:
       - Fonctionnalités: fonctionnalites.md
       - Démo: demo.md
   - Conception:
-      - Architecture et contexte: architecture.md
+      - Architecture: architecture.md
+      - Contexte envoyé au modèle: contexte.md
       - Choix et alternatives: choix.md
       - Limites: limites.md
   - Mesures:

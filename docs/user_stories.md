@@ -2,6 +2,10 @@
 
 Au moins deux histoires utilisateur par fonctionnalité implémentée.
 
+Chaque histoire indique l'étape du [scénario d'usage](scenario.md) qu'elle sert : **P**
+(préparation du poste) ou **S0** à **S5** (consultation). Les tests qui la vérifient sont
+dans [Traçabilité](tracabilite.md#user-story-etape-verification).
+
 Format :
 
 ```
@@ -17,6 +21,8 @@ Critères d'acceptation :
 
 ### B1 — Voir la réponse s'écrire
 
+Scénario : [**S0**](scenario.md#le-scenario-fil-rouge-de-la-demo) — la réponse s'affiche au fil de l'eau.
+
 En tant que médecin, je souhaite voir la réponse s'afficher au fur et à mesure dans le terminal, afin de savoir que l'assistant travaille et de commencer à lire sans attendre la fin.
 
 Critères d'acceptation :
@@ -26,6 +32,8 @@ Critères d'acceptation :
 - Ctrl+C pendant la génération arrête la réponse ; la session reste ouverte et le tour interrompu n'est pas enregistré.
 
 ### B1 — Garder le fil de la consultation
+
+Scénario : [**S0**](scenario.md#le-scenario-fil-rouge-de-la-demo) — les questions de suivi pendant la consultation.
 
 En tant que médecin, je souhaite que l'assistant se souvienne de ce que j'ai dit plus tôt dans la conversation, afin de poser des questions de suivi sans tout répéter.
 
@@ -37,6 +45,8 @@ Critères d'acceptation :
 
 ### B1 — Comprendre une panne sans trace technique
 
+Scénario : [**S0**](scenario.md#le-scenario-fil-rouge-de-la-demo) — ouvrir la consultation alors qu'Ollama ne répond pas.
+
 En tant que médecin, je souhaite un message clair quand l'assistant ne peut pas répondre, afin de savoir quoi faire sans appeler un informaticien.
 
 Critères d'acceptation :
@@ -46,6 +56,8 @@ Critères d'acceptation :
 - Modèle sans capacité `tools` : refus au démarrage ; modèle `thinking` : avertissement.
 
 ### B1 — Changer de modèle sans toucher au code
+
+Scénario : [**P**](scenario.md#le-scenario-fil-rouge-de-la-demo) — le prestataire choisit le modèle adapté au PC du cabinet.
 
 En tant que responsable informatique du cabinet, je souhaite choisir le modèle dans `config.toml` ou au lancement, afin d'adapter l'assistant à la machine disponible.
 
@@ -57,6 +69,8 @@ Critères d'acceptation :
 
 ### X1 — Consulter depuis le navigateur
 
+Scénario : [**S0**](scenario.md#le-scenario-fil-rouge-de-la-demo) — le médecin ouvre la consultation dans le navigateur.
+
 En tant que médecin, je souhaite utiliser l'assistant dans une page web, afin de travailler sans terminal.
 
 Critères d'acceptation :
@@ -66,6 +80,8 @@ Critères d'acceptation :
 - Les appels d'outils et les sources du dernier tour sont affichés à côté de la conversation.
 
 ### X1 — Choisir le patient, le profil et le modèle
+
+Scénario : [**S0**](scenario.md#le-scenario-fil-rouge-de-la-demo) — ouvrir la consultation de Mme Dupont avec le profil du médecin.
 
 En tant que médecin, je souhaite ouvrir une consultation pour un patient et un profil, et changer de modèle ou de réglage depuis la page, afin d'adapter l'assistant sans relancer le serveur.
 
@@ -77,6 +93,8 @@ Critères d'acceptation :
 
 ### X1 — Voir ce que le modèle a reçu
 
+Scénario : [**S1**](scenario.md#le-scenario-fil-rouge-de-la-demo) — vérifier que « Mme Dupont » est partie sous la forme `[PATIENT_1]`.
+
 En tant que médecin, je souhaite afficher le prompt exact envoyé au modèle, afin de vérifier qu'aucun nom de patient n'en sort.
 
 Critères d'acceptation :
@@ -86,6 +104,8 @@ Critères d'acceptation :
 - Le nombre de tokens lus et la taille de la fenêtre de contexte sont affichés.
 
 ### A3 — Valider une écriture dans le dossier
+
+Scénario : [**S4**](scenario.md#le-scenario-fil-rouge-de-la-demo) — valider ou refuser la note proposée.
 
 En tant que médecin, je souhaite approuver toute modification d'un dossier avant qu'elle soit écrite, afin que l'IA ne modifie jamais une donnée médicale sans mon accord.
 
@@ -97,6 +117,8 @@ Critères d'acceptation :
 
 ### A3 — Valider depuis la page web
 
+Scénario : [**S4**](scenario.md#le-scenario-fil-rouge-de-la-demo) — la même validation, dans une fenêtre du navigateur.
+
 En tant que médecin, je souhaite une fenêtre de confirmation dans le navigateur, afin de valider ou refuser une action sans quitter l'interface.
 
 Critères d'acceptation :
@@ -107,6 +129,8 @@ Critères d'acceptation :
 
 ### EV3 — Garder une trace de chaque tour, sans données patient
 
+Scénario : [**S5**](scenario.md#le-scenario-fil-rouge-de-la-demo) — chaque tour est journalisé, pseudonymisé.
+
 En tant que responsable du cabinet, je souhaite un journal de chaque échange, afin de pouvoir vérifier après coup ce que l'assistant a fait.
 
 Critères d'acceptation :
@@ -116,6 +140,8 @@ Critères d'acceptation :
 - Une écriture de log en échec n'interrompt pas la consultation.
 
 ### EV3 — Suivre les performances
+
+Scénario : [**S5**](scenario.md#le-scenario-fil-rouge-de-la-demo) — le tableau de bord montre la latence.
 
 En tant que responsable du cabinet, je souhaite voir le volume, la latence et le taux d'erreur, afin de savoir si un changement de modèle ou de réglage ralentit l'assistant.
 
@@ -129,6 +155,8 @@ Critères d'acceptation :
 
 ### M1 — Reprendre une session (livré avec SQLite et la CLI)
 
+Scénario : [**S0**](scenario.md#le-scenario-fil-rouge-de-la-demo) — reprendre la consultation de Mme Dupont après un redémarrage.
+
 En tant que médecin, je souhaite reprendre une conversation après le redémarrage de l'assistant, afin de poursuivre mon travail sans ressaisir les échanges précédents.
 
 Critères d'acceptation :
@@ -138,6 +166,8 @@ Critères d'acceptation :
 - Les sessions sont listables et restent indépendantes ; une session inconnue est vide.
 
 ### M1 — Profil médecin (livré avec SQLite, commandes et injection du contexte)
+
+Scénario : [**S0**](scenario.md#le-scenario-fil-rouge-de-la-demo) — le profil du Dr Martin est injecté dès l'ouverture de la consultation.
 
 En tant que médecin, je souhaite enregistrer ma spécialité, mes préférences et mes instructions, afin que l'assistant adapte ses réponses dès le démarrage.
 
@@ -149,6 +179,8 @@ Critères d'acceptation :
 
 ### M1 — Garder les conversations séparées (livré avec la reprise du contexte)
 
+Scénario : [**S0**](scenario.md#le-scenario-fil-rouge-de-la-demo) — une session par consultation, liée à Mme Dupont.
+
 En tant que médecin, je souhaite que chaque conversation conserve le patient et le profil sélectionnés, afin de reprendre une consultation sans mélanger les dossiers.
 
 Critères d'acceptation :
@@ -158,6 +190,8 @@ Critères d'acceptation :
 - Le démarrage refuse de reprendre une session avec un autre patient explicitement demandé.
 
 ### M1 — Choisir un profil médecin (livré avec la CLI)
+
+Scénario : [**S0**](scenario.md#le-scenario-fil-rouge-de-la-demo) — ouvrir la consultation avec le profil `generaliste`.
 
 En tant que médecin, je souhaite sélectionner un profil enregistré, afin d'appliquer mes préférences à une nouvelle conversation.
 
@@ -169,6 +203,8 @@ Critères d'acceptation :
 
 ### M3 — Consulter un dossier (livré avec API, contexte et outils locaux/MCP)
 
+Scénario : [**S2**](scenario.md#le-scenario-fil-rouge-de-la-demo) — retrouver l'allergie à la pénicilline dans le dossier.
+
 En tant que médecin, je souhaite retrouver les allergies, traitements et antécédents d'un patient, afin de disposer des informations enregistrées pour ma consultation.
 
 Critères d'acceptation :
@@ -178,6 +214,8 @@ Critères d'acceptation :
 - Le jeu fictif contient Mme Jeanne Dupont avec une allergie à la pénicilline.
 
 ### M3 — Mettre à jour un dossier (livré avec validation humaine)
+
+Scénario : [**S4**](scenario.md#le-scenario-fil-rouge-de-la-demo) — la note validée est écrite dans le dossier.
 
 En tant que médecin, je souhaite ajouter une note et corriger les données d'un dossier, afin de conserver des informations à jour pour les consultations suivantes.
 
@@ -189,6 +227,8 @@ Critères d'acceptation :
 
 ### R1 — Rechercher dans les notices (livré avec ingestion et recherche locale)
 
+Scénario : [**S3**](scenario.md#le-scenario-fil-rouge-de-la-demo) — retrouver l'extrait de la notice ANSM de l'amoxicilline.
+
 En tant que médecin, je souhaite retrouver les passages pertinents des notices ANSM et des recommandations HAS, afin d'obtenir des réponses fondées sur mon corpus documentaire local.
 
 Critères d'acceptation :
@@ -198,6 +238,8 @@ Critères d'acceptation :
 - La recherche utilise la similarité cosinus et une requête pseudonymisée, sans indexer les dossiers patients.
 
 ### R1 — Identifier les sources (livré via ContextProvider et /sources)
+
+Scénario : [**S3**](scenario.md#le-scenario-fil-rouge-de-la-demo) — citer la notice avec sa source.
 
 En tant que médecin, je souhaite connaître les sources des extraits utilisés, afin de pouvoir vérifier les informations proposées.
 
@@ -209,6 +251,8 @@ Critères d'acceptation :
 
 ### R2 — Limiter les documents recherchés (livré)
 
+Scénario : [**S3**](scenario.md#le-scenario-fil-rouge-de-la-demo) — ne chercher que dans les sources utiles à la question.
+
 En tant que médecin, je souhaite filtrer les documents par éditeur, étiquettes et date connue, afin de rechercher dans les sources adaptées à ma question.
 
 Critères d'acceptation :
@@ -218,6 +262,8 @@ Critères d'acceptation :
 - Un filtre sans résultat retourne une recherche vide sans appeler le modèle d'embeddings.
 
 ### R2 — Écarter les extraits peu pertinents (livré avec BM25)
+
+Scénario : [**S3**](scenario.md#le-scenario-fil-rouge-de-la-demo) — ne garder que les extraits utiles, dans un contexte limité.
 
 En tant que médecin, je souhaite que les passages retenus soient reclassés et soumis à des seuils de pertinence, afin de limiter les extraits inutiles dans le contexte.
 
@@ -234,6 +280,8 @@ EV1 (évaluation automatique par un LLM-juge) n'a pas été livrée : voir
 
 ### T1 — Laisser l'assistant consulter le dossier par un outil
 
+Scénario : [**S4**](scenario.md#le-scenario-fil-rouge-de-la-demo) — l'assistant appelle lui-même `add_patient_note`.
+
 En tant que médecin, je souhaite que l'assistant appelle lui-même les outils patients quand ma demande le nécessite, afin d'obtenir une réponse fondée sur le dossier plutôt que sur sa mémoire.
 
 Critères d'acceptation :
@@ -243,6 +291,8 @@ Critères d'acceptation :
 - Un appel d'outil invalide, ou un outil non proposé pour ce tour, est refusé sans action exécutée.
 
 ### T1 — Isoler les outils patients dans un serveur MCP
+
+Scénario : [**P**](scenario.md#le-scenario-fil-rouge-de-la-demo) et [**S4**](scenario.md#le-scenario-fil-rouge-de-la-demo) — le prestataire active `--mcp` ; la note de S4 passe par le serveur MCP.
 
 En tant que responsable informatique du cabinet, je souhaite que les outils patients tournent dans un processus séparé accessible par MCP, afin de pouvoir les réutiliser ou les remplacer sans modifier l'assistant.
 
@@ -254,6 +304,8 @@ Critères d'acceptation :
 
 ### T1 — Brancher un serveur MCP existant
 
+Scénario : [**P**](scenario.md#le-scenario-fil-rouge-de-la-demo) — le prestataire ajoute un outil en déclarant un serveur dans `config.toml`.
+
 En tant que responsable informatique du cabinet, je souhaite ajouter un serveur MCP écrit par d'autres en le déclarant dans la configuration, afin de donner un nouvel outil à l'assistant sans modifier son code.
 
 Critères d'acceptation :
@@ -263,6 +315,8 @@ Critères d'acceptation :
 - Si le serveur ne démarre pas, il est signalé et ignoré, et la consultation continue.
 
 ### EV2 — Ne jamais envoyer l'identité d'un patient au modèle
+
+Scénario : [**S1**](scenario.md#le-scenario-fil-rouge-de-la-demo) — « Mme Dupont » devient `[PATIENT_1]` avant l'envoi au modèle.
 
 En tant que médecin, je souhaite que le nom, la date de naissance, l'adresse, le téléphone, le numéro de sécurité sociale et l'email d'un patient soient remplacés par des pseudonymes avant l'envoi au modèle, afin de respecter le secret médical.
 
@@ -274,6 +328,8 @@ Critères d'acceptation :
 
 ### EV2 — Bloquer les détournements et masquer les fuites
 
+Scénario : [**S1**](scenario.md#le-scenario-fil-rouge-de-la-demo) — la question passe les filtres d'entrée ; la réponse est masquée avant l'historique.
+
 En tant que médecin, je souhaite que les tentatives de détournement soient refusées avant d'atteindre le modèle, et que les données personnelles restantes soient masquées dans les réponses, afin que l'assistant reste dans son rôle.
 
 Critères d'acceptation :
@@ -283,6 +339,8 @@ Critères d'acceptation :
 - Un téléphone, un email, un NIR ou un IBAN présent dans une réponse est masqué avant l'enregistrement.
 
 ### EV2 — Adapter les règles au cabinet
+
+Scénario : [**P**](scenario.md#le-scenario-fil-rouge-de-la-demo) — le prestataire ajoute une règle de filtrage dans `config.toml`.
 
 En tant que responsable informatique du cabinet, je souhaite ajouter ou retirer des règles de filtrage dans la configuration, afin de bloquer un nouveau contournement sans attendre une nouvelle version du code.
 
