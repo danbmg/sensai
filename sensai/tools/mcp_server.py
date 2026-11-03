@@ -19,21 +19,11 @@ def create_server(db_path: str) -> MCPServer:
     register_patient_tools(registry, PatientStore(db_path))
     server = MCPServer("sensai-medical", log_level="WARNING")
 
-    def run(tool_name: str, **args) -> dict:
-        result = registry.call(tool_name, args)
+    def run(name: str, **args) -> dict:
+        result = registry.call(name, args)
         if result.is_error:
             raise ToolError(result.content)
         return json.loads(result.content)
-
-    @server.tool()
-    def create_patient(name: str, birth_date: str = "") -> dict:
-        """Crée un patient ; le client doit obtenir la confirmation du médecin. Date AAAA-MM-JJ facultative."""
-        return run("create_patient", name=name, birth_date=birth_date)
-
-    @server.tool()
-    def delete_patient(patient: str) -> dict:
-        """Supprime définitivement le dossier sans ambiguïté ; confirmation du médecin requise."""
-        return run("delete_patient", patient=patient)
 
     @server.tool()
     def get_patient(patient: str) -> dict:

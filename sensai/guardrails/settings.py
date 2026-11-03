@@ -40,7 +40,7 @@ def load_guardrail_settings(path: str | Path | None = None) -> GuardrailSettings
         length = section.get("max_input_length", GuardrailSettings.max_input_length)
         if not isinstance(length, int) or isinstance(length, bool) or length < 1:
             raise ValueError("max_input_length doit être un entier positif")
-        families = _names(section.get("input_rules", INPUT_FAMILIES), (*INPUT_FAMILIES, "medical_scope"), "input_rules")
+        families = _names(section.get("input_rules", INPUT_FAMILIES), INPUT_FAMILIES, "input_rules")
         types = _names(section.get("output_types", OUTPUT_TYPES), OUTPUT_TYPES, "output_types")
         rules = section.get("custom_rules", [])
         if not isinstance(rules, list):

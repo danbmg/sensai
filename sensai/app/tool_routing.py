@@ -24,11 +24,6 @@ def requested_tools(text: str, keywords: dict[str, tuple[str, ...]] | None = Non
     """
     query = text.casefold()
     names = {name for name, words in (keywords or {}).items() if any(word in query for word in words)}
-    # Un patient entier, contrairement à une note ou une liste de son dossier.
-    if re.search(r"\b(?:ajout\w*|cr[ée]e[rz]?|créer|enregistre[rz]?)\s+(?:(?:un|une|le|la|nouveau|nouvelle)\s+)*(?:patient|patiente)\b", query):
-        names.add("create_patient")
-    if re.search(r"\b(?:supprim\w*|retir\w*|efface[rz]?|enl[eè]v\w*)\s+(?:(?:le|la|un|une|ce|cette|patient|patiente|dossier|de|du)\s+)*(?:patient|patiente|dossier)\b", query):
-        names.update({"delete_patient", "find_patients", "get_patient"})
     if _NOTE.search(query) and _ADD.search(query):
         names.add("add_patient_note")
     elif _FIELD.search(query):

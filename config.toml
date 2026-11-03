@@ -46,7 +46,7 @@ directory = "logs"
 enabled = true
 max_input_length = 20000
 # Règles d'entrée intégrées : "injection" (contourner les consignes), "secrets" (mots de passe, clés API).
-input_rules = ["injection", "secrets", "medical_scope"]
+input_rules = ["injection", "secrets"]
 # Données masquées dans la réponse avant l'historique et les logs : "EMAIL", "TEL", "NIR", "IBAN".
 output_types = ["EMAIL", "TEL", "NIR", "IBAN"]
 
