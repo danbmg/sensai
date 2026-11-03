@@ -26,6 +26,16 @@ def create_server(db_path: str) -> MCPServer:
         return json.loads(result.content)
 
     @server.tool()
+    def create_patient(name: str, birth_date: str = "") -> dict:
+        """Crée un patient ; le client doit obtenir la confirmation du médecin. Date AAAA-MM-JJ facultative."""
+        return run("create_patient", name=name, birth_date=birth_date)
+
+    @server.tool()
+    def delete_patient(patient_id: str) -> dict:
+        """Supprime définitivement le dossier par identifiant exact ; confirmation du médecin requise."""
+        return run("delete_patient", patient_id=patient_id)
+
+    @server.tool()
     def get_patient(patient: str) -> dict:
         """Consulte un dossier patient local par nom complet ou identifiant."""
         return run("get_patient", patient=patient)
