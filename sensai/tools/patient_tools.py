@@ -40,9 +40,9 @@ def register_patient_tools(registry, patients: PatientStore) -> None:
             raise ValueError("Un patient avec ce nom et cette date existe déjà. Consultez son dossier.")
         return patients.create_patient(name, birth_date)
 
-    def delete(patient_id: str) -> dict:
-        # Identifiant obligatoire : aucune suppression par nom, même sans homonyme.
-        patient = patients.get_patient(patient_id)
+    def delete(patient: str) -> dict:
+        # Refuser les homonymes avant toute suppression.
+        patient = patients.resolve_patient(patient)
         patients.delete_patient(patient["patient_id"])
         return {"deleted": True, "patient_id": patient["patient_id"], "name": patient["name"]}
 
@@ -57,10 +57,10 @@ def register_patient_tools(registry, patients: PatientStore) -> None:
     )
     registry.register(
         name="delete_patient",
-        description="Supprime définitivement le dossier patient après confirmation du médecin. Utiliser son identifiant exact, obtenu par find_patients ou get_patient ; jamais deviner un identifiant.",
+        description="Supprime définitivement le dossier patient après confirmation du médecin. Utiliser son nom complet ou son identifiant ; les homonymes sont refusés.",
         parameters={"type": "object", "properties": {
-            "patient_id": {"type": "string", "description": "Identifiant SQLite exact du patient à supprimer"}},
-            "required": ["patient_id"], "additionalProperties": False},
+            "patient": PATIENT_ARG},
+            "required": ["patient"], "additionalProperties": False},
         function=delete, dangerous=True,
     )
 

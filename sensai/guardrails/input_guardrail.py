@@ -8,6 +8,7 @@ import re
 
 from sensai.core.interfaces import GuardResult
 from sensai.guardrails.settings import INPUT_FAMILIES, GuardRule
+from sensai.guardrails.medical_scope import REASON, is_medical
 
 
 class SensaiInputGuard:
@@ -53,8 +54,9 @@ class SensaiInputGuard:
                  custom_rules: tuple[GuardRule, ...] = (), max_input_length: int = MAX_INPUT_LENGTH):
         """Familles de règles intégrées retenues, puis règles propres au cabinet ([guardrails])."""
         patterns = {"injection": self.INJECTION_PATTERNS, "secrets": self.SENSITIVE_EXTRACTION_PATTERNS}
+        self.medical_scope = "medical_scope" in families
         self.max_input_length = max_input_length
-        self.rules = [(pattern, self.REASONS[family]) for family in families for pattern in patterns[family]]
+        self.rules = [(pattern, self.REASONS[family]) for family in families if family in patterns for pattern in patterns[family]]
         self.rules += [(re.compile(rule.pattern, re.IGNORECASE | re.DOTALL), rule.reason)
                        for rule in custom_rules]
 
@@ -86,5 +88,8 @@ class SensaiInputGuard:
         for pattern, reason in self.rules:
             if pattern.search(text):
                 return GuardResult(blocked=True, reason=reason)
+
+        if self.medical_scope and not is_medical(text):
+            return GuardResult(blocked=True, reason=REASON)
 
         return GuardResult(blocked=False)

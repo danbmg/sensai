@@ -215,3 +215,16 @@ Le site MkDocs (`mkdocs serve -a 127.0.0.1:8001`) regroupe :
 - [Architecture et contexte](docs/architecture.md), [choix et alternatives](docs/choix.md), [limites](docs/limites.md)
 - [Mesures avec ou sans contexte](docs/mesures.md), [benchmark des modèles](docs/bench.md)
 - [Mémoire](docs/memory.md), [documents publics](docs/rag.md), [vérification de la démo](docs/demo_verified.md)
+
+### Créer et supprimer un patient par conversation
+
+- « Ajoute un patient nommé Jean Martin, né le 1980-03-12 » appelle `create_patient`.
+  Seul le nom est obligatoire ; une date inconnue reste vide. Les autres données
+  peuvent ensuite être ajoutées avec les outils du dossier.
+- « Supprime le patient Jean Martin » propose `delete_patient`, après identification
+  avec `find_patients` ou `get_patient` si nécessaire. Un nom ambigu est refusé.
+
+Les deux actions demandent la confirmation du médecin avant écriture, en local
+comme avec `--mcp`. La suppression efface définitivement le dossier SQLite ; elle
+ne supprime pas les historiques des conversations. Si le dossier sélectionné est
+supprimé, sélectionner un autre patient pour poursuivre une consultation.
