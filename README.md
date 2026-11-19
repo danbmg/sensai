@@ -1,5 +1,7 @@
 # Sensai
 
+> 🎓 Projet Epitech (3e année, Epitech Nice, 2026), réalisé en équipe.
+
 Assistant IA 100 % local pour un cabinet médical, en Python. Le modèle tourne sur le PC du
 cabinet via l'API HTTP directe d'Ollama, sans framework LLM. Le médecin demande, par exemple,
 « Mme Dupont peut-elle prendre de l'amoxicilline ? ». Sensai pseudonymise la question, lit le
